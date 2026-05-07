@@ -610,9 +610,32 @@ document.querySelectorAll('.modal-bg').forEach(m=>m.addEventListener('click',e=>
 // ── AUTH ──
 async function init(){
   showLoading(true);
-  // Listen for auth changes first
+
+  // Timeout de segurança — se travar no loading por mais de 5s, vai para login
+  const timeout = setTimeout(()=>{
+    showLoading(false);
+    document.getElementById('screen-login').style.display='flex';
+  }, 5000);
+
+  try {
+    // Checa sessão existente
+    const { data:{ session } } = await sb.auth.getSession();
+    clearTimeout(timeout);
+    if(session){
+      await onLogin(session.user);
+    } else {
+      showLoading(false);
+      document.getElementById('screen-login').style.display='flex';
+    }
+  } catch(e){
+    clearTimeout(timeout);
+    showLoading(false);
+    document.getElementById('screen-login').style.display='flex';
+  }
+
+  // Listener para mudanças de auth
   sb.auth.onAuthStateChange(async(event,session)=>{
-    if(event==='SIGNED_IN' && session){
+    if(event==='SIGNED_IN' && session && !USER){
       await onLogin(session.user);
     }
     if(event==='SIGNED_OUT') onLogout();
@@ -620,14 +643,6 @@ async function init(){
       USER=session.user;
     }
   });
-  // Then check existing session
-  const { data:{ session } } = await sb.auth.getSession();
-  if(session){
-    await onLogin(session.user);
-  } else {
-    showLoading(false);
-    document.getElementById('screen-login').style.display='flex';
-  }
 }
 
 async function fazerLogin(){
