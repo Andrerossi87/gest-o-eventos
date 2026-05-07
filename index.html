@@ -585,12 +585,16 @@ const diasAte = s => {
   return Math.ceil((d-hoje)/(1000*60*60*24));
 };
 const alertaInfo = (ini,fim) => {
-  const d=diasAte(ini); if(d===null) return null;
-  if(d<0) return {cls:'al-e',icon:'○',label:'Encerrado',dias:d,txt:`Encerrado há ${Math.abs(d)} dia${Math.abs(d)!==1?'s':''}`};
-  if(d===0) return {cls:'al-u',icon:'●',label:'Hoje',dias:d,txt:'Evento hoje!'};
-  if(d<=7) return {cls:'al-u',icon:'●',label:`${d}d`,dias:d,txt:`Faltam ${d} dia${d!==1?'s':''} (${fmtDate(ini)} → ${fmtDate(fim)})`};
-  if(d<=30) return {cls:'al-p',icon:'◐',label:`${d}d`,dias:d,txt:`Faltam ${d} dias (${fmtDate(ini)} → ${fmtDate(fim)})`};
-  return {cls:'al-o',icon:'○',label:`${d}d`,dias:d,txt:`${d} dias restantes (${fmtDate(ini)} → ${fmtDate(fim)})`};
+  const dIni=diasAte(ini); if(dIni===null) return null;
+  const dFim=diasAte(fim);
+  // Em andamento: início já passou mas fim ainda não
+  if(dIni<0 && dFim>=0) return {cls:'al-p',icon:'●',label:'Em andamento',dias:dIni,txt:`Em andamento — encerra em ${dFim} dia${dFim!==1?'s':''} (${fmtDate(fim)})`};
+  // Encerrado: fim já passou
+  if(dFim<0) return {cls:'al-e',icon:'○',label:'Encerrado',dias:dIni,txt:`Encerrado há ${Math.abs(dFim)} dia${Math.abs(dFim)!==1?'s':''}`};
+  if(dIni===0) return {cls:'al-u',icon:'●',label:'Hoje',dias:dIni,txt:'Evento começa hoje!'};
+  if(dIni<=7) return {cls:'al-u',icon:'●',label:`${dIni}d`,dias:dIni,txt:`Faltam ${dIni} dia${dIni!==1?'s':''} (${fmtDate(ini)} → ${fmtDate(fim)})`};
+  if(dIni<=30) return {cls:'al-p',icon:'◐',label:`${dIni}d`,dias:dIni,txt:`Faltam ${dIni} dias (${fmtDate(ini)} → ${fmtDate(fim)})`};
+  return {cls:'al-o',icon:'○',label:`${dIni}d`,dias:dIni,txt:`${dIni} dias restantes (${fmtDate(ini)} → ${fmtDate(fim)})`};
 };
 const pillAlerta = al => {
   if(!al) return '';
@@ -805,7 +809,7 @@ function renderDashboard(){
   const {evs,gastos,itens}=getFilteredData('filtro-dash');
   const totGasto=gastos.reduce((s,g)=>s+(g.total_evento||0),0);
   const totRes=gastos.reduce((s,g)=>s+(g.resultado||0),0);
-  const urgentes=evs.filter(e=>{const d=diasAte(e.data_ini);return d!==null&&d>=0&&d<=7;}).length;
+  const urgentes=evs.filter(e=>{const d=diasAte(e.data_ini);const df=diasAte(e.data_fim);return d!==null&&d>=0&&d<=7&&df>=0;}).length;
   const totalItens=itens.reduce((s,i)=>s+(i.valor_total||0),0);
   document.getElementById('dash-kpis').innerHTML=[
     {l:'Total eventos',v:evs.length,s:'cadastrados',c:''},
@@ -1018,7 +1022,12 @@ function renderEventos(){
   if(!EVENTOS.length){tb.innerHTML=`<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text3)" colspan="8">Nenhum evento cadastrado ainda.</td></tr>`;return;}
   tb.innerHTML=EVENTOS.map(ev=>{
     const al=alertaInfo(ev.data_ini,ev.data_fim);
-    const status=al?(al.dias<0?`<span class="pill pgr">Encerrado</span>`:`<span class="pill pb">Futuro</span>`):'—';
+    const dFim2=diasAte(ev.data_fim);
+    const dIni2=diasAte(ev.data_ini);
+    let status='—';
+    if(dFim2<0) status='<span class="pill pgr">Encerrado</span>';
+    else if(dIni2<=0 && dFim2>=0) status='<span class="pill pa">Em andamento</span>';
+    else status='<span class="pill pb">Futuro</span>';
     const acoes=canEdit?`<button class="btn btn-ghost btn-sm" onclick="abrirModalEvento('${ev.id}')">Editar</button> <button class="btn btn-danger btn-sm" onclick="excluirEvento('${ev.id}')">✕</button>`:`<span style="font-size:11px;color:var(--text3)">—</span>`;
     return `<tr>
       <td title="${ev.nome}"><strong style="font-weight:500">${ev.nome}</strong></td>
@@ -1088,6 +1097,30 @@ async function salvarItem(){
   if(resItem.error){toast('Erro: '+resItem.error.message,true);return;}
   closeModal('modal-item'); toast('Item salvo!');
 }
+
+function editarItem(id){
+  const it = ITENS.find(i=>i.id===id);
+  if(!it) return;
+  // Open modal with event pre-selected
+  populateEvSelects();
+  document.getElementById('mitem-ev').value = it.evento_id;
+  document.getElementById('mitem-nome').value = it.nome||'';
+  document.getElementById('mitem-qtd').value = it.qtd??'';
+  document.getElementById('mitem-dias').value = it.diarias??'';
+  document.getElementById('mitem-vmed').value = it.valor_medio??'';
+  document.getElementById('mitem-obs').value = it.obs||'';
+  document.getElementById('mitem-id').value = id;
+  // Load rateio
+  let rateio = [];
+  if(it.rateio){ try{ rateio=JSON.parse(it.rateio); }catch(e){} }
+  else if(it.centro_custo){ rateio=[{cc:it.centro_custo, pct:it.percentual||100}]; }
+  initRateio(rateio);
+  // Update calc preview
+  const q=parseN(it.qtd)||1, d=parseN(it.diarias)||1, v=parseN(it.valor_medio)||0;
+  document.getElementById('item-calc').innerHTML=`Total: <strong>${fmtBR(q*d*v)}</strong>`;
+  document.getElementById('modal-item').classList.add('open');
+}
+
 async function excluirItem(id){
   await sbQuery(()=>sb.from('itens_orcamento').delete().eq('id',id));
   toast('Item removido.');
