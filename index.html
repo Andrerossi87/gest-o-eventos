@@ -1009,7 +1009,7 @@ async function salvarEvento(){
   closeModal('modal-ev'); toast('Evento salvo!');
 }
 async function excluirEvento(id){
-  if(!confirm('Excluir este evento? Todos os itens e lançamentos serão removidos.')) return;
+  if(!confirm('Tem certeza que deseja excluir este evento? Todos os itens e lançamentos vinculados serão removidos. Esta ação não pode ser desfeita.')) return;
   await sbQuery(()=>sb.from('itens_orcamento').delete().eq('evento_id',id));
   await sbQuery(()=>sb.from('controle_gastos').delete().eq('evento_id',id));
   const resDelEv=await sbQuery(()=>sb.from('eventos').delete().eq('id',id));
@@ -1122,6 +1122,7 @@ function editarItem(id){
 }
 
 async function excluirItem(id){
+  if(!confirm('Tem certeza que deseja excluir este item? Esta ação não pode ser desfeita.')) return;
   await sbQuery(()=>sb.from('itens_orcamento').delete().eq('id',id));
   toast('Item removido.');
 }
@@ -1151,7 +1152,7 @@ function renderOrcamento(){
     <td style="font-size:11px;text-align:center">${renderPctCell(it)}</td>
     <td style="font-size:11px;color:var(--text2);white-space:normal">${it.obs||''}</td>
     <td style="font-size:11px;color:var(--text2)">${it.user_nome||'—'}</td>
-    <td style="white-space:nowrap">${canEdit?`<button class="btn btn-ghost btn-sm" onclick="editarItem('${it.id}')" style="margin-right:4px">✎</button><button class="btn btn-danger btn-sm" onclick="excluirItem('${it.id}')">✕</button>`:'—'}</td>
+    <td style="white-space:nowrap;min-width:80px">${canEdit?`<button class="btn btn-ghost btn-sm" onclick="editarItem('${it.id}')" style="margin-right:4px">✎</button><button class="btn btn-danger btn-sm" onclick="excluirItem('${it.id}')">✕</button>`:'—'}</td>
   </tr>`).join('');
 }
 
@@ -1357,7 +1358,8 @@ async function salvarGasto(){
   closeModal('modal-gasto'); toast('Lançamento salvo!');
 }
 async function excluirGasto(id){
-  await sb.from('controle_gastos').delete().eq('id',id);
+  if(!confirm('Tem certeza que deseja excluir este lançamento? Esta ação não pode ser desfeita.')) return;
+  await sbQuery(()=>sb.from('controle_gastos').delete().eq('id',id));
   toast('Registro removido.');
 }
 function renderControleKPIs(){
