@@ -552,7 +552,14 @@ const CC_OPTIONS = {"CORPORATIVO": ["CORPORATIVO-YAZIGI", "CORPORATIVO-ADMINISTR
 const SUPABASE_URL = 'https://durymbmwufaqcxeidsje.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_fPDOE3y5up87Otc_PTXy_w_AucKQuzh';
 const { createClient } = supabase;
-const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    storageKey: 'gestao-eventos-auth'
+  }
+});
 
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 let USER = null;
@@ -603,6 +610,17 @@ document.querySelectorAll('.modal-bg').forEach(m=>m.addEventListener('click',e=>
 // ── AUTH ──
 async function init(){
   showLoading(true);
+  // Listen for auth changes first
+  sb.auth.onAuthStateChange(async(event,session)=>{
+    if(event==='SIGNED_IN' && session){
+      await onLogin(session.user);
+    }
+    if(event==='SIGNED_OUT') onLogout();
+    if(event==='TOKEN_REFRESHED' && session){
+      USER=session.user;
+    }
+  });
+  // Then check existing session
   const { data:{ session } } = await sb.auth.getSession();
   if(session){
     await onLogin(session.user);
@@ -610,10 +628,6 @@ async function init(){
     showLoading(false);
     document.getElementById('screen-login').style.display='flex';
   }
-  sb.auth.onAuthStateChange(async(event,session)=>{
-    if(event==='SIGNED_IN' && session) await onLogin(session.user);
-    if(event==='SIGNED_OUT') onLogout();
-  });
 }
 
 async function fazerLogin(){
@@ -630,7 +644,10 @@ async function fazerLogin(){
 }
 
 async function onLogin(user){
+  if(USER && USER.id === user.id) return; // already logged in
   USER=user;
+  // Refresh session to ensure token is valid
+  await sb.auth.refreshSession();
   const {data:perfil}=await sb.from('perfis').select('*').eq('user_id',user.id).single();
   PERFIL=perfil||{role:'compras',nome:user.email.split('@')[0]};
   configurarUI();
@@ -667,6 +684,7 @@ function configurarUI(){
 // ── DADOS ──
 function salvarLocal(){} // no-op — Supabase mode
 async function carregarDados(){
+  await sb.auth.refreshSession();
   const [ev,it,gs]=await Promise.all([
     sb.from('eventos').select('*').order('data_ini'),
     sb.from('itens_orcamento').select('*').order('created_at'),
@@ -964,18 +982,19 @@ async function salvarEvento(){
   const editId=document.getElementById('mev-id').value;
   const ano=parseInt(document.getElementById('mev-ano').value)||new Date(ini+'T00:00:00').getFullYear();
   const payload={nome,ano,data_ini:ini,data_fim:fim,obs:document.getElementById('mev-obs').value,user_id:USER.id,user_nome:PERFIL.nome||USER.email};
-  let err;
-  if(editId){({error:err}=await sb.from('eventos').update(payload).eq('id',editId));}
-  else{({error:err}=await sb.from('eventos').insert(payload));}
-  if(err){toast('Erro ao salvar: '+err.message,true);return;}
+  const resEv = await sbQuery(()=> editId
+    ? sb.from('eventos').update(payload).eq('id',editId)
+    : sb.from('eventos').insert(payload)
+  );
+  if(resEv.error){toast('Erro ao salvar: '+resEv.error.message,true);return;}
   closeModal('modal-ev'); toast('Evento salvo!');
 }
 async function excluirEvento(id){
   if(!confirm('Excluir este evento? Todos os itens e lançamentos serão removidos.')) return;
-  await sb.from('itens_orcamento').delete().eq('evento_id',id);
-  await sb.from('controle_gastos').delete().eq('evento_id',id);
-  const {error}=await sb.from('eventos').delete().eq('id',id);
-  if(error){toast('Erro ao excluir.',true);return;}
+  await sbQuery(()=>sb.from('itens_orcamento').delete().eq('evento_id',id));
+  await sbQuery(()=>sb.from('controle_gastos').delete().eq('evento_id',id));
+  const resDelEv=await sbQuery(()=>sb.from('eventos').delete().eq('id',id));
+  if(resDelEv.error){toast('Erro ao excluir.',true);return;}
   toast('Evento excluído.');
 }
 function renderEventos(){
@@ -1047,14 +1066,15 @@ async function salvarItem(){
   const pct=rateio.length>0?rateio[0].pct:null;
   const obs=document.getElementById('mitem-obs').value.trim();
   const payload={evento_id:evId,nome,qtd,diarias:dias,valor_medio:vmed,valor_total:vtot,centro_custo:cc,percentual:pct,rateio:rateio.length>0?JSON.stringify(rateio):null,obs:obs||null,user_id:USER.id,user_nome:PERFIL.nome||USER.email};
-  let errI;
-  if(editId){({error:errI}=await sb.from('itens_orcamento').update(payload).eq('id',editId));}
-  else{({error:errI}=await sb.from('itens_orcamento').insert(payload));}
-  if(errI){toast('Erro: '+errI.message,true);return;}
+  const resItem = await sbQuery(()=> editId
+    ? sb.from('itens_orcamento').update(payload).eq('id',editId)
+    : sb.from('itens_orcamento').insert(payload)
+  );
+  if(resItem.error){toast('Erro: '+resItem.error.message,true);return;}
   closeModal('modal-item'); toast('Item salvo!');
 }
 async function excluirItem(id){
-  await sb.from('itens_orcamento').delete().eq('id',id);
+  await sbQuery(()=>sb.from('itens_orcamento').delete().eq('id',id));
   toast('Item removido.');
 }
 function renderOrcamento(){
@@ -1281,10 +1301,11 @@ async function salvarGasto(){
   const res=(receita!==null&&total!==null)?receita-total:null;
   const editId=document.getElementById('mgasto-id').value;
   const payload={evento_id:evId,staff,inscritos,pagantes,total_evento:total,orcamento:orc,receita,resultado:res,user_id:USER.id,user_nome:PERFIL.nome||USER.email};
-  let errG;
-  if(editId){({error:errG}=await sb.from('controle_gastos').update(payload).eq('id',editId));}
-  else{({error:errG}=await sb.from('controle_gastos').insert(payload));}
-  if(errG){toast('Erro: '+errG.message,true);return;}
+  const resGasto = await sbQuery(()=> editId
+    ? sb.from('controle_gastos').update(payload).eq('id',editId)
+    : sb.from('controle_gastos').insert(payload)
+  );
+  if(resGasto.error){toast('Erro: '+resGasto.error.message,true);return;}
   closeModal('modal-gasto'); toast('Lançamento salvo!');
 }
 async function excluirGasto(id){
@@ -1387,6 +1408,26 @@ document.addEventListener('DOMContentLoaded',()=>{
   const s=document.getElementById('l-senha');
   if(s) s.addEventListener('keydown',e=>{if(e.key==='Enter')fazerLogin();});
 });
+
+// ── SESSÃO ROBUSTA ──
+async function getSessionValida(){
+  let { data:{ session } } = await sb.auth.getSession();
+  if(!session){
+    const { data } = await sb.auth.refreshSession();
+    session = data.session;
+  }
+  return session;
+}
+async function sbQuery(fn){
+  // Tenta executar, se der 401/403 renova token e tenta de novo
+  let resultado = await fn();
+  if(resultado.error && (resultado.error.code==='PGRST301' || resultado.error.message?.includes('JWT') || resultado.error.message?.includes('token') || resultado.error.message?.includes('permission'))){
+    await sb.auth.refreshSession();
+    resultado = await fn();
+  }
+  return resultado;
+}
+
 // ── START ──
 init();
 </script>
