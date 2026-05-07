@@ -1151,7 +1151,7 @@ function renderOrcamento(){
     <td style="font-size:11px;text-align:center">${renderPctCell(it)}</td>
     <td style="font-size:11px;color:var(--text2);white-space:normal">${it.obs||''}</td>
     <td style="font-size:11px;color:var(--text2)">${it.user_nome||'—'}</td>
-    <td>${canEdit?`<button class="btn btn-danger btn-sm" onclick="excluirItem('${it.id}')">✕</button>`:'—'}</td>
+    <td style="white-space:nowrap">${canEdit?`<button class="btn btn-ghost btn-sm" onclick="editarItem('${it.id}')" style="margin-right:4px">✎</button><button class="btn btn-danger btn-sm" onclick="excluirItem('${it.id}')">✕</button>`:'—'}</td>
   </tr>`).join('');
 }
 
