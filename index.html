@@ -327,12 +327,23 @@ tr.item-pendente:hover td{background:#fff5dc;}
               <option value="">Todos</option>
             </select>
           </div>
-          <div class="ph-filter">
-            <label>Centro de custo</label>
-            <select id="filtro-dash" onchange="renderDashboard()">
-              <option value="">Todos</option>
-            </select>
+          <div class="ctrl-filter-wrap" id="dash-cc-filter-wrap">
+            <button class="ctrl-filter-btn" id="dash-cc-filter-btn" onclick="toggleDashCCFilter()" style="min-width:160px">
+              <span id="dash-cc-filter-label">Centro de custo</span>
+              <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </button>
+            <div class="ctrl-filter-dropdown" id="dash-cc-filter-dropdown">
+              <div class="ctrl-filter-search">
+                <input type="text" id="dash-cc-filter-search" placeholder="Buscar centro de custo..." oninput="filtrarDashCCSearch(this.value)"/>
+              </div>
+              <div class="ctrl-filter-list" id="dash-cc-filter-list"></div>
+              <div class="ctrl-filter-actions">
+                <button class="ctrl-filter-clear" onclick="limparDashCCFiltro()">Limpar</button>
+                <button class="btn btn-primary btn-sm" onclick="aplicarDashCCFiltro()">OK</button>
+              </div>
+            </div>
           </div>
+          <input type="hidden" id="filtro-dash"/>
           <div class="ctrl-filter-wrap" id="dash-ev-filter-wrap">
             <button class="ctrl-filter-btn" id="dash-ev-filter-btn" onclick="toggleDashEvFilter()" style="min-width:160px">
               <span id="dash-ev-filter-label">Todos os eventos</span>
@@ -377,12 +388,7 @@ tr.item-pendente:hover td{background:#fff5dc;}
               <option value="">Todos</option>
             </select>
           </div>
-          <div class="ph-filter">
-            <label>Centro de custo</label>
-            <select id="filtro-graf" onchange="renderGraficos()">
-              <option value="">Todos</option>
-            </select>
-          </div>
+          <input type="hidden" id="filtro-graf"/>
           <div class="ctrl-filter-wrap" id="graf-ev-filter-wrap">
             <button class="ctrl-filter-btn" id="graf-ev-filter-btn" onclick="toggleGrafEvFilter()" style="min-width:160px">
               <span id="graf-ev-filter-label">Todos os eventos</span>
@@ -399,15 +405,10 @@ tr.item-pendente:hover td{background:#fff5dc;}
               </div>
             </div>
           </div>
-          <div class="ph-filter">
-            <label>Modo</label>
-            <select id="filtro-graf-modo" onchange="renderGraficos()">
-              <option value="normal">Por evento</option>
-              <option value="anual">Comparativo anual</option>
-            </select>
-          </div>
+
         </div>
       </div>
+      <div class="metrics" id="graf-kpis" style="margin-bottom:14px"></div>
       <div class="card mb">
         <div class="card-title">Orçado vs realizado — por evento</div>
         <div class="leg-row">
@@ -424,6 +425,7 @@ tr.item-pendente:hover td{background:#fff5dc;}
             <span><span class="leg-sq" style="background:#1a56a0"></span>Pagantes</span>
           </div>
           <div class="ch-wrap" style="height:220px"><canvas id="ch-part" role="img" aria-label="Inscritos vs pagantes">Participantes por evento.</canvas></div>
+
         </div>
         <div class="card">
           <div class="card-title">Eficiência orçamentária (%)</div>
@@ -434,6 +436,27 @@ tr.item-pendente:hover td{background:#fff5dc;}
           <div class="ch-wrap" style="height:220px"><canvas id="ch-efic" role="img" aria-label="Eficiência orçamentária">% do orçamento utilizado.</canvas></div>
         </div>
       </div>
+
+      <!-- PIZZAS -->
+      <div class="grid2" style="margin-top:14px">
+        <div class="card">
+          <div class="card-title">Orçado × Realizado × Receita (%)</div>
+          <div class="leg-row" id="leg-pizza-orc"></div>
+          <div class="ch-wrap" style="height:220px"><canvas id="ch-pizza-orc" role="img" aria-label="Pizza financeira">Distribuição financeira.</canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Realizado por centro de custo</div>
+          <div class="leg-row" id="leg-pizza-cc"></div>
+          <div class="ch-wrap" style="height:220px"><canvas id="ch-pizza-cc" role="img" aria-label="Pizza CC">Realizado por CC.</canvas></div>
+        </div>
+      </div>
+
+      <!-- RESUMO INTELIGENTE -->
+      <div class="card" id="graf-resumo" style="margin-top:14px">
+        <div class="card-title">📊 Resumo — análise por evento e centro de custo</div>
+        <div id="graf-resumo-content"></div>
+      </div>
+
     </div>
 
     <!-- COMPARATIVO ANUAL (dentro de graficos, renderizado via JS) -->
@@ -1022,9 +1045,85 @@ document.addEventListener('click',e=>{
 
 
 
+
+// ── FILTRO CENTRO DE CUSTO DASHBOARD & GRÁFICOS ──
+let dashCCFiltro = new Set();
+let grafCCFiltro = new Set();
+let dashCCOpen = false;
+let grafCCOpen = false;
+
+function getCCList(){
+  const ccs = new Set();
+  ITENS.forEach(i=>{
+    if(i.centro_custo) ccs.add(i.centro_custo);
+    if(i.rateio){try{JSON.parse(i.rateio).forEach(r=>r.cc&&ccs.add(r.cc));}catch(e){}}
+  });
+  return [...ccs].sort();
+}
+
+function buildCCFilterList(listId, filtroSet, search=''){
+  const list=document.getElementById(listId); if(!list) return;
+  const todos=getCCList();
+  const filtrados=search?todos.filter(cc=>cc.toLowerCase().includes(search.toLowerCase())):todos;
+  if(!filtrados.length){list.innerHTML='<div style="padding:10px 12px;font-size:12px;color:var(--text3)">Nenhum encontrado</div>';return;}
+  list.innerHTML=filtrados.map(cc=>`
+    <label class="ctrl-filter-item">
+      <input type="checkbox" value="${cc}" ${filtroSet.has(cc)?'checked':''}
+        onchange="toggleCCItem('${listId}','${cc}',this.checked)"/>
+      <span>${cc}</span>
+    </label>`).join('');
+}
+function toggleCCItem(listId,cc,checked){
+  const set=listId.includes('dash')?dashCCFiltro:grafCCFiltro;
+  if(checked) set.add(cc); else set.delete(cc);
+}
+function updateCCBtn(prefix,filtroSet){
+  const btn=document.getElementById(prefix+'-cc-filter-btn');
+  const label=document.getElementById(prefix+'-cc-filter-label');
+  if(!btn||!label) return;
+  if(filtroSet.size===0){label.textContent='Centro de custo';btn.classList.remove('active');}
+  else{label.textContent=`${filtroSet.size} CC selecionado${filtroSet.size>1?'s':''}`;btn.classList.add('active');}
+}
+
+// Dashboard CC
+function toggleDashCCFilter(){
+  dashCCOpen=!dashCCOpen;
+  document.getElementById('dash-cc-filter-dropdown').classList.toggle('open',dashCCOpen);
+  if(dashCCOpen){buildCCFilterList('dash-cc-filter-list',dashCCFiltro,'');document.getElementById('dash-cc-filter-search').value='';}
+}
+function filtrarDashCCSearch(val){buildCCFilterList('dash-cc-filter-list',dashCCFiltro,val);}
+function limparDashCCFiltro(){dashCCFiltro.clear();buildCCFilterList('dash-cc-filter-list',dashCCFiltro,'');aplicarDashCCFiltro();}
+function aplicarDashCCFiltro(){
+  dashCCOpen=false;
+  document.getElementById('dash-cc-filter-dropdown').classList.remove('open');
+  updateCCBtn('dash',dashCCFiltro);
+  renderDashboard();
+}
+
+// Graficos CC
+function toggleGrafCCFilter(){
+  grafCCOpen=!grafCCOpen;
+  document.getElementById('graf-cc-filter-dropdown').classList.toggle('open',grafCCOpen);
+  if(grafCCOpen){buildCCFilterList('graf-cc-filter-list',grafCCFiltro,'');document.getElementById('graf-cc-filter-search').value='';}
+}
+function filtrarGrafCCSearch(val){buildCCFilterList('graf-cc-filter-list',grafCCFiltro,val);}
+function limparGrafCCFiltro(){grafCCFiltro.clear();buildCCFilterList('graf-cc-filter-list',grafCCFiltro,'');aplicarGrafCCFiltro();}
+function aplicarGrafCCFiltro(){
+  grafCCOpen=false;
+  document.getElementById('graf-cc-filter-dropdown').classList.remove('open');
+  updateCCBtn('graf',grafCCFiltro);
+  renderGraficos();
+}
+
+// Close on outside click
+document.addEventListener('click',e=>{
+  const dcc=document.getElementById('dash-cc-filter-wrap');
+  if(dcc&&!dcc.contains(e.target)&&dashCCOpen){dashCCOpen=false;document.getElementById('dash-cc-filter-dropdown').classList.remove('open');}
+  const gcc=document.getElementById('graf-cc-filter-wrap');
+  if(gcc&&!gcc.contains(e.target)&&grafCCOpen){grafCCOpen=false;document.getElementById('graf-cc-filter-dropdown').classList.remove('open');}
+});
+
 // ── FILTRO EVENTO GRÁFICOS ──
-let grafEvFiltro = new Set();
-let grafEvOpen = false;
 
 function toggleGrafEvFilter(){
   grafEvOpen=!grafEvOpen;
@@ -1076,8 +1175,6 @@ function aplicarGrafEvFiltro(){
 }
 
 // ── FILTRO EVENTO DASHBOARD ──
-let dashEvFiltro = new Set();
-let dashEvOpen = false;
 
 function toggleDashEvFilter(){
   dashEvOpen=!dashEvOpen;
@@ -1145,12 +1242,7 @@ function getAnoOptions(){
 function populateCCFilters(){
   const ccOpts=getCCOptions();
   const anoOpts=getAnoOptions();
-  ['filtro-dash','filtro-graf'].forEach(id=>{
-    const sel=document.getElementById(id); if(!sel) return;
-    const cur=sel.value;
-    sel.innerHTML=ccOpts.map(v=>`<option value="${v}">${v===''?'Todos':v}</option>`).join('');
-    if(cur&&ccOpts.includes(cur)) sel.value=cur;
-  });
+  // CC selects replaced by multi-select dropdowns
   ['filtro-dash-ano','filtro-graf-ano'].forEach(id=>{
     const sel=document.getElementById(id); if(!sel) return;
     const cur=sel.value;
@@ -1159,9 +1251,9 @@ function populateCCFilters(){
   });
 }
 function getFilteredData(filtroId){
-  const cc=document.getElementById(filtroId)?.value||'';
   const anoSelId=filtroId==='filtro-dash'?'filtro-dash-ano':'filtro-graf-ano';
   const ano=document.getElementById(anoSelId)?.value||'';
+  const ccFiltro=filtroId==='filtro-dash'?dashCCFiltro:grafCCFiltro;
   let evs=EVENTOS;
   if(ano) evs=evs.filter(e=>String(getAnoEv(e))===String(ano));
   // Apply event filter
@@ -1171,11 +1263,13 @@ function getFilteredData(filtroId){
   if(filtroId==='filtro-graf'&&grafEvFiltro&&grafEvFiltro.size>0){
     evs=evs.filter(e=>grafEvFiltro.has(e.id));
   }
-  if(cc){
+  // Apply CC filter (multi)
+  if(ccFiltro&&ccFiltro.size>0){
     const evIdsWithCC=new Set(ITENS.filter(i=>{
-      if(i.centro_custo===cc) return true;
-      if(i.rateio){try{return JSON.parse(i.rateio).some(r=>r.cc===cc);}catch(e){}}
-      return false;
+      const ccList=[];
+      if(i.centro_custo) ccList.push(i.centro_custo);
+      if(i.rateio){try{JSON.parse(i.rateio).forEach(r=>r.cc&&ccList.push(r.cc));}catch(e){}}
+      return ccList.some(cc=>ccFiltro.has(cc));
     }).map(i=>i.evento_id));
     evs=evs.filter(e=>evIdsWithCC.has(e.id));
   }
@@ -1188,11 +1282,11 @@ function renderDashboard(){
   const totGasto=gastos.reduce((s,g)=>s+(g.total_evento||0),0);
   const totRes=gastos.reduce((s,g)=>s+(g.resultado||0),0);
   const urgentes=evs.filter(e=>{const d=diasAte(e.data_ini);const df=diasAte(e.data_fim);return d!==null&&d>=0&&d<=7&&df>=0;}).length;
-  const totalItens=itens.reduce((s,i)=>s+(i.valor_total||0),0);
+  const totalItens=gastos.reduce((s,g)=>s+(g.orcamento||0),0);
   document.getElementById('dash-kpis').innerHTML=[
     {l:'Total eventos',v:evs.length,s:'cadastrados',c:''},
     {l:'Próximos 7 dias',v:urgentes,s:'urgentes',c:urgentes>0?'red':'green'},
-    {l:'Itens orçados',v:fmtBR(totalItens),s:'previsto',c:'blue'},
+    {l:'Orçamento',v:fmtBR(totalItens),s:'previsto',c:'amber'},
     {l:'Total realizado',v:fmtBR(totGasto),s:'gasto',c:''},
     {l:'Resultado geral',v:(totRes>=0?'+':'')+fmtBR(totRes),s:totRes>=0?'superávit':'déficit',c:totRes>=0?'green':'red'},
   ].map(m=>`<div class="metric"><div class="metric-label">${m.l}</div><div class="metric-value ${m.c}">${m.v}</div><div class="metric-sub">${m.s}</div></div>`).join('');
@@ -1234,7 +1328,15 @@ function renderDashboard(){
 function renderComparativoAnual(){
   const cc=document.getElementById('filtro-graf')?.value||'';
   let evs=grafEvFiltro&&grafEvFiltro.size>0?EVENTOS.filter(e=>grafEvFiltro.has(e.id)):[...EVENTOS];
-  if(cc) evs=evs.filter(e=>e.centro_custo===cc);
+  if(grafCCFiltro&&grafCCFiltro.size>0){
+    const evIdsCC=new Set(ITENS.filter(i=>{
+      const ccList=[];
+      if(i.centro_custo) ccList.push(i.centro_custo);
+      if(i.rateio){try{JSON.parse(i.rateio).forEach(r=>r.cc&&ccList.push(r.cc));}catch(e){}}
+      return ccList.some(cc=>grafCCFiltro.has(cc));
+    }).map(i=>i.evento_id));
+    evs=evs.filter(e=>evIdsCC.has(e.id));
+  }
   const evIds=new Set(evs.map(e=>e.id));
   const gastosFilt=GASTOS.filter(g=>evIds.has(g.evento_id));
 
@@ -1290,9 +1392,141 @@ function renderComparativoAnual(){
   });
 }
 
+
+
+function renderGrafResumo(gFilt){
+  const el=document.getElementById('graf-resumo-content');
+  if(!el) return;
+  if(!gFilt.length){el.innerHTML='<p style="font-size:12px;color:var(--text3)">Nenhum dado para analisar.</p>';return;}
+
+  const lucrativos=[];
+  const prejuizo=[];
+  const zerados=[];
+
+  gFilt.forEach(g=>{
+    const ev=EVENTOS.find(e=>e.id===g.evento_id);
+    const nome=ev?ev.nome:g.evento_id;
+    const res=g.resultado||0;
+    const total=g.total_evento||0;
+    const orc=g.orcamento||0;
+
+    // CC breakdown
+    const ccBreak={};
+    ITENS.filter(i=>i.evento_id===g.evento_id).forEach(i=>{
+      if(i.rateio){
+        try{JSON.parse(i.rateio).forEach(r=>{
+          if(r.cc) ccBreak[r.cc]=(ccBreak[r.cc]||0)+(i.valor_total||0)*(r.pct/100);
+        });}catch(e){}
+      } else if(i.centro_custo){
+        ccBreak[i.centro_custo]=(ccBreak[i.centro_custo]||0)+(i.valor_total||0);
+      }
+    });
+    const ccList=Object.entries(ccBreak).sort((a,b)=>b[1]-a[1]);
+
+    const item={nome,res,total,orc,ccList,receita:g.receita||0};
+    if(res>0) lucrativos.push(item);
+    else if(res<0) prejuizo.push(item);
+    else zerados.push(item);
+  });
+
+  // Sort
+  lucrativos.sort((a,b)=>b.res-a.res);
+  prejuizo.sort((a,b)=>a.res-b.res);
+
+  let html='';
+
+  // Prejuízo
+  if(prejuizo.length){
+    html+=`<div style="margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span style="font-size:16px">🔴</span>
+        <span style="font-size:13px;font-weight:600;color:var(--red)">Eventos com prejuízo (${prejuizo.length})</span>
+      </div>`;
+    prejuizo.forEach(e=>{
+      const ccHtml=e.ccList.length?`<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:6px">`+
+        e.ccList.map(([cc,val])=>`<span style="font-size:10px;background:var(--red-bg);color:var(--red);padding:2px 8px;border-radius:20px">${cc}: ${fmtBR(val)}</span>`).join('')+
+        `</div>`:'';
+      html+=`<div style="padding:10px 12px;background:var(--red-bg);border:1px solid #f0b0b0;border-radius:8px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px">
+          <strong style="font-size:13px;color:var(--text)">${e.nome}</strong>
+          <span style="font-size:13px;font-weight:600;color:var(--red)">${fmtBR(e.res)}</span>
+        </div>
+        <div style="font-size:11px;color:var(--text2);margin-top:2px">
+          Gasto: ${fmtBR(e.total)} · Orçado: ${fmtBR(e.orc)} · Receita: ${e.receita>0?fmtBR(e.receita):'—'}
+        </div>
+        ${ccHtml}
+      </div>`;
+    });
+    html+='</div>';
+  }
+
+  // Lucrativos
+  if(lucrativos.length){
+    html+=`<div style="margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span style="font-size:16px">🟢</span>
+        <span style="font-size:13px;font-weight:600;color:var(--green)">Eventos com superávit (${lucrativos.length})</span>
+      </div>`;
+    lucrativos.forEach(e=>{
+      const ccHtml=e.ccList.length?`<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:6px">`+
+        e.ccList.map(([cc,val])=>`<span style="font-size:10px;background:var(--green-bg);color:var(--green);padding:2px 8px;border-radius:20px">${cc}: ${fmtBR(val)}</span>`).join('')+
+        `</div>`:'';
+      html+=`<div style="padding:10px 12px;background:var(--green-bg);border:1px solid #b0d898;border-radius:8px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px">
+          <strong style="font-size:13px;color:var(--text)">${e.nome}</strong>
+          <span style="font-size:13px;font-weight:600;color:var(--green)">+${fmtBR(e.res)}</span>
+        </div>
+        <div style="font-size:11px;color:var(--text2);margin-top:2px">
+          Gasto: ${fmtBR(e.total)} · Orçado: ${fmtBR(e.orc)} · Receita: ${e.receita>0?fmtBR(e.receita):'—'}
+        </div>
+        ${ccHtml}
+      </div>`;
+    });
+    html+='</div>';
+  }
+
+  // Zerados
+  if(zerados.length){
+    html+=`<div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span style="font-size:16px">⚪</span>
+        <span style="font-size:13px;font-weight:500;color:var(--text2)">Sem resultado definido (${zerados.length})</span>
+      </div>`;
+    zerados.forEach(e=>{
+      html+=`<div style="padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;font-size:12px;color:var(--text2)">
+        ${e.nome} — sem receita ou orçamento lançado
+      </div>`;
+    });
+    html+='</div>';
+  }
+
+  if(!html) html='<p style="font-size:12px;color:var(--text3)">Nenhum resultado para analisar com os filtros aplicados.</p>';
+  el.innerHTML=html;
+}
+
+function renderGrafKPIs(){
+  const {gastos:gf}=getFilteredData('filtro-graf');
+  const totO=gf.reduce((s,g)=>s+(g.orcamento||0),0);
+  const totT=gf.reduce((s,g)=>s+(g.total_evento||0),0);
+  const totRec=gf.reduce((s,g)=>s+(g.receita||0),0);
+  const totRes=gf.reduce((s,g)=>s+(g.resultado||0),0);
+  const npsEvs=gf.filter(g=>g.nps_participantes!=null);
+  const npsMedia=npsEvs.length>0?(npsEvs.reduce((s,g)=>s+(g.nps_participantes||0),0)/npsEvs.length).toFixed(1)+'%':'—';
+  const el=document.getElementById('graf-kpis');
+  if(!el) return;
+  el.innerHTML=[
+    {l:'Orçamento',v:fmtBR(totO),c:'amber',s:'previsto'},
+    {l:'Total realizado',v:fmtBR(totT),c:'',s:'gasto'},
+    {l:'Receita',v:fmtBR(totRec),c:'green',s:'obtida'},
+    {l:'Resultado',v:(totRes>=0?'+':'')+fmtBR(totRes),c:totRes>=0?'green':'red',s:totRes>=0?'superávit':'déficit'},
+    {l:'NPS Participantes',v:npsMedia,c:'blue',s:'média satisfação'},
+  ].map(m=>`<div class="metric"><div class="metric-label">${m.l}</div><div class="metric-value ${m.c}">${m.v}</div><div class="metric-sub">${m.s}</div></div>`).join('');
+}
+
 function renderGraficos(){
   populateCCFilters();
-  const modo=document.getElementById('filtro-graf-modo')?.value||'normal';
+  renderGrafKPIs();
+  const modo='normal';
   const cardComp=document.getElementById('card-comparativo');
 
   if(modo==='anual'){
@@ -1308,6 +1542,7 @@ function renderGraficos(){
   // Restore normal chart cards
   document.querySelectorAll('#page-graficos .card').forEach(el=>{ if(el!==cardComp) el.style.display=''; });
   const {gastos:gFilt}=getFilteredData('filtro-graf');
+  renderGrafResumo(gFilt);
   const gcom=gFilt.filter(g=>g.total_evento||g.orcamento);
   const evN=gcom.map(g=>{const ev=EVENTOS.find(e=>e.id===g.evento_id);return ev?ev.nome:g.evento_id;});
   if(charts.orc) charts.orc.destroy();
@@ -1321,6 +1556,8 @@ function renderGraficos(){
     ]},
     options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+fmtBR(c.raw)}}},scales:{x:{ticks:{callback:v=>'R$'+(Math.abs(v)>=1000?(v/1000).toFixed(0)+'k':v),font:{size:10}},grid:{color:'rgba(0,0,0,0.04)'}},y:{ticks:{font:{size:10}},grid:{display:false}}}}
   });
+
+
   if(charts.part) charts.part.destroy();
   const gpart=gFilt.filter(g=>g.inscritos||g.pagantes);
   const evPart=gpart.map(g=>{const ev=EVENTOS.find(e=>e.id===g.evento_id);return ev?ev.nome:g.evento_id;});
@@ -1332,6 +1569,71 @@ function renderGraficos(){
     ]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:9},maxRotation:40,autoSkip:false},grid:{display:false}},y:{beginAtZero:true,ticks:{font:{size:10}},grid:{color:'rgba(0,0,0,0.04)'}}}}
   });
+  // ── Pizza: Orçado × Realizado × Receita ──
+  if(charts.pizzaOrc) charts.pizzaOrc.destroy();
+  const totOrcP=gFilt.reduce((s,g)=>s+(g.orcamento||0),0);
+  const totRealP=gFilt.reduce((s,g)=>s+(g.total_evento||0),0);
+  const totRecP=gFilt.reduce((s,g)=>s+(g.receita||0),0);
+  const totSomP=totOrcP+totRealP+totRecP;
+  const legPizza=document.getElementById('leg-pizza-orc');
+  const pizzaLabels=['Orçado','Realizado','Receita'];
+  const pizzaData=[totOrcP,totRealP,totRecP];
+  const pizzaCores=['#b8d0f0','#1a56a0','#2d6a1f'];
+  if(legPizza) legPizza.innerHTML=pizzaLabels.map((l,i)=>{
+    const pct=totSomP>0?Math.round(pizzaData[i]/totSomP*100):0;
+    return `<span><span class="leg-sq" style="background:${pizzaCores[i]}"></span>${l} ${pct}%</span>`;
+  }).join('');
+  charts.pizzaOrc=new Chart(document.getElementById('ch-pizza-orc'),{
+    type:'doughnut',
+    data:{labels:pizzaLabels,datasets:[{data:pizzaData,backgroundColor:pizzaCores,borderWidth:2,borderColor:'#fff'}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>{
+        const pct=totSomP>0?Math.round(ctx.raw/totSomP*100):0;
+        return ` ${ctx.label}: ${fmtBR(ctx.raw)} (${pct}%)`;
+      }}}}
+    }
+  });
+
+  // ── Pizza CC: Realizado por centro de custo ──
+  if(charts.pizzaCC) charts.pizzaCC.destroy();
+  const CC_CORES_P=['#EAB308','#DC2626','#2d6a1f','#8a5a00','#4a3a99','#c4520a','#0e7490','#6b21a8'];
+  const ccTotais={};
+  gFilt.forEach(g=>{
+    ITENS.filter(i=>i.evento_id===g.evento_id).forEach(i=>{
+      if(i.rateio){
+        try{JSON.parse(i.rateio).forEach(r=>{
+          if(r.cc) ccTotais[r.cc]=(ccTotais[r.cc]||0)+(i.valor_total||0)*(r.pct/100);
+        });}catch(e){}
+      } else if(i.centro_custo){
+        ccTotais[i.centro_custo]=(ccTotais[i.centro_custo]||0)+(i.valor_total||0);
+      }
+    });
+  });
+  const ccKeys=Object.keys(ccTotais).sort();
+  const ccVals=ccKeys.map(k=>ccTotais[k]);
+  const ccSom=ccVals.reduce((s,v)=>s+v,0);
+  const legCC=document.getElementById('leg-pizza-cc');
+  if(legCC) legCC.innerHTML=ccKeys.map((k,i)=>{
+    const pct=ccSom>0?Math.round(ccVals[i]/ccSom*100):0;
+    return `<span><span class="leg-sq" style="background:${CC_CORES_P[i%CC_CORES_P.length]}"></span>${k} ${pct}%</span>`;
+  }).join('');
+  if(ccKeys.length){
+    charts.pizzaCC=new Chart(document.getElementById('ch-pizza-cc'),{
+      type:'doughnut',
+      data:{labels:ccKeys,datasets:[{data:ccVals,backgroundColor:ccKeys.map((_,i)=>CC_CORES_P[i%CC_CORES_P.length]),borderWidth:2,borderColor:'#fff'}]},
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>{
+          const pct=ccSom>0?Math.round(ctx.raw/ccSom*100):0;
+          return ` ${ctx.label}: ${fmtBR(ctx.raw)} (${pct}%)`;
+        }}}}
+      }
+    });
+  } else if(legCC){
+    legCC.innerHTML='<span style="font-size:12px;color:var(--text3)">Sem dados de centro de custo</span>';
+  }
+
+
+
   if(charts.efic) charts.efic.destroy();
   const gefic=gFilt.filter(g=>g.total_evento&&g.orcamento);
   const evEfic=gefic.map(g=>{const ev=EVENTOS.find(e=>e.id===g.evento_id);return ev?ev.nome:g.evento_id;});
@@ -1816,6 +2118,9 @@ async function salvarItem(){
   );
   if(resItem.error){toast('Erro: '+resItem.error.message,true);return;}
   if(btnSalvar){btnSalvar.disabled=false;btnSalvar.innerHTML='Salvar';}
+  // Sincronizar total no Orçamento
+  const evIdSync=document.getElementById('mitem-ev').value;
+  await sincronizarTotalOrcamento(evIdSync);
   closeModal('modal-item'); toast('Item salvo!');
 }
 
@@ -2016,7 +2321,7 @@ function renderOrcamento(){
   // Para evento único: checar se tem orçamento lançado em GASTOS
   if(evsSel.length===1){
     const ev=evsSel[0];
-    const temOrcamento=GASTOS.some(g=>g.evento_id===ev.id && g.orcamento!=null && g.orcamento>0);
+    const temOrcamento=GASTOS.some(g=>g.evento_id===ev.id);
     // Alert de data
     const al=alertaInfo(ev.data_ini,ev.data_fim);
     const alertaDataHtml=al?`<div class="al ${al.cls}" style="margin-bottom:8px"><span class="al-icon">${al.icon}</span><span>${al.txt}</span></div>`:'';
@@ -2215,6 +2520,20 @@ function autoAno(){
   const ini=document.getElementById('mev-ini').value;
   if(ini){ document.getElementById('mev-ano').value=new Date(ini+'T00:00:00').getFullYear(); }
 }
+
+async function sincronizarTotalOrcamento(evId){
+  if(!evId) return;
+  const total = getTotalOrcamento(evId);
+  // Find existing gasto record for this event
+  const gasto = GASTOS.find(g=>g.evento_id===evId);
+  if(gasto){
+    // Update existing record
+    gasto.total_evento = total;
+    await sbQuery(()=>sb.from('controle_gastos').update({total_evento:total}).eq('id',gasto.id));
+  }
+  // If no record exists, don't create one — user fills other fields manually first
+}
+
 function getTotalOrcamento(evId){
   return ITENS.filter(i=>i.evento_id===evId).reduce((s,i)=>s+(i.valor_total||0),0);
 }
