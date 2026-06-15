@@ -285,7 +285,7 @@ tr.item-pendente:hover td{background:#fff5dc;}
       <div class="nav-sec">Visão geral</div>
       <button class="nav-item active" onclick="goPage('dashboard',this)">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="6" height="6" rx="1.5"/><rect x="9" y="1" width="6" height="6" rx="1.5"/><rect x="1" y="9" width="6" height="6" rx="1.5"/><rect x="9" y="9" width="6" height="6" rx="1.5"/></svg>
-        Dashboard
+        Status
       </button>
       <button class="nav-item" onclick="goPage('graficos',this)">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="1,12 5,7 8,10 11,5 15,3"/></svg>
@@ -319,29 +319,13 @@ tr.item-pendente:hover td{background:#fff5dc;}
     <!-- DASHBOARD -->
     <div class="page active" id="page-dashboard">
       <div class="ph">
-        <div><h2>Dashboard</h2><p>Visão geral atualizada em tempo real</p></div>
+        <div><h2>Status</h2><p>Visão geral atualizada em tempo real</p></div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
           <div class="ph-filter">
             <label>Ano</label>
             <select id="filtro-dash-ano" onchange="renderDashboard()">
               <option value="">Todos</option>
             </select>
-          </div>
-          <div class="ctrl-filter-wrap" id="dash-cc-filter-wrap">
-            <button class="ctrl-filter-btn" id="dash-cc-filter-btn" onclick="toggleDashCCFilter()" style="min-width:160px">
-              <span id="dash-cc-filter-label">Centro de custo</span>
-              <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-            </button>
-            <div class="ctrl-filter-dropdown" id="dash-cc-filter-dropdown">
-              <div class="ctrl-filter-search">
-                <input type="text" id="dash-cc-filter-search" placeholder="Buscar centro de custo..." oninput="filtrarDashCCSearch(this.value)"/>
-              </div>
-              <div class="ctrl-filter-list" id="dash-cc-filter-list"></div>
-              <div class="ctrl-filter-actions">
-                <button class="ctrl-filter-clear" onclick="limparDashCCFiltro()">Limpar</button>
-                <button class="btn btn-primary btn-sm" onclick="aplicarDashCCFiltro()">OK</button>
-              </div>
-            </div>
           </div>
           <input type="hidden" id="filtro-dash"/>
           <div class="ctrl-filter-wrap" id="dash-ev-filter-wrap">
@@ -364,17 +348,6 @@ tr.item-pendente:hover td{background:#fff5dc;}
       </div>
       <div class="metrics" id="dash-kpis"></div>
       <div id="dash-alertas" style="margin-bottom:12px"></div>
-      <div class="grid2">
-        <div class="card">
-          <div class="card-title">Resultado por evento</div>
-          <div class="ch-wrap" style="height:220px"><canvas id="ch-dash-res" role="img" aria-label="Resultado financeiro por evento">Gráfico de resultado por evento.</canvas></div>
-        </div>
-        <div class="card">
-          <div class="card-title">Distribuição de status</div>
-          <div class="leg-row" id="leg-dash-status"></div>
-          <div class="ch-wrap" style="height:190px"><canvas id="ch-dash-status" role="img" aria-label="Status financeiro dos eventos">Distribuição de status financeiro.</canvas></div>
-        </div>
-      </div>
     </div>
 
     <!-- GRÁFICOS -->
@@ -455,6 +428,17 @@ tr.item-pendente:hover td{background:#fff5dc;}
       <div class="card" id="graf-resumo" style="margin-top:14px">
         <div class="card-title">📊 Resumo — análise por evento e centro de custo</div>
         <div id="graf-resumo-content"></div>
+      </div>
+
+      <!-- MINI DRE -->
+      <div class="card" id="graf-dre" style="margin-top:14px;overflow-x:auto">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <div>
+            <div class="card-title" style="margin-bottom:2px">📋 DRE — Demonstrativo de Resultados</div>
+            <div style="font-size:11px;color:var(--text3)">YTD — acumulado no ano, por evento e mês</div>
+          </div>
+        </div>
+        <div id="graf-dre-content"></div>
       </div>
 
     </div>
@@ -1279,16 +1263,17 @@ function getFilteredData(filtroId){
 function renderDashboard(){
   populateCCFilters();
   const {evs,gastos,itens}=getFilteredData('filtro-dash');
-  const totGasto=gastos.reduce((s,g)=>s+(g.total_evento||0),0);
-  const totRes=gastos.reduce((s,g)=>s+(g.resultado||0),0);
+  const totGasto=itens.reduce((s,i)=>s+(i.valor_total||0),0);
+  const totOrc=gastos.reduce((s,g)=>s+(g.orcamento||0),0);
+  const totRec=gastos.reduce((s,g)=>s+(g.receita||0),0);
+  const totRes=totOrc+totRec-totGasto;
   const urgentes=evs.filter(e=>{const d=diasAte(e.data_ini);const df=diasAte(e.data_fim);return d!==null&&d>=0&&d<=7&&df>=0;}).length;
-  const totalItens=gastos.reduce((s,g)=>s+(g.orcamento||0),0);
   document.getElementById('dash-kpis').innerHTML=[
     {l:'Total eventos',v:evs.length,s:'cadastrados',c:''},
     {l:'Próximos 7 dias',v:urgentes,s:'urgentes',c:urgentes>0?'red':'green'},
-    {l:'Orçamento',v:fmtBR(totalItens),s:'previsto',c:'amber'},
-    {l:'Total realizado',v:fmtBR(totGasto),s:'gasto',c:''},
-    {l:'Resultado geral',v:(totRes>=0?'+':'')+fmtBR(totRes),s:totRes>=0?'superávit':'déficit',c:totRes>=0?'green':'red'},
+    {l:'Orçamento',v:fmtBR(totOrc),s:'previsto',c:'amber'},
+    {l:'Despesas',v:fmtBR(totGasto),s:'realizado',c:''},
+    {l:'Líquido (Orc+Rec-Desp)',v:(totRes>=0?'+':'')+fmtBR(totRes),s:totRes>=0?'superávit':'déficit',c:totRes>=0?'green':'red'},
   ].map(m=>`<div class="metric"><div class="metric-label">${m.l}</div><div class="metric-value ${m.c}">${m.v}</div><div class="metric-sub">${m.s}</div></div>`).join('');
 
   // Alertas
@@ -1298,29 +1283,7 @@ function renderDashboard(){
     `<div class="al ${x.al.cls}"><span class="al-icon">${x.al.icon}</span><div><strong>${x.ev.nome}</strong> — ${x.al.txt}</div></div>`
   ).join('');
 
-  // Chart resultado
-  if(charts.dashRes) charts.dashRes.destroy();
-  const gres=gastos.filter(g=>g.resultado!==null&&g.resultado!==undefined);
-  const evNomes=gres.map(g=>{const ev=EVENTOS.find(e=>e.id===g.evento_id);return ev?ev.nome:g.evento_id;});
-  charts.dashRes=new Chart(document.getElementById('ch-dash-res'),{
-    type:'bar',
-    data:{labels:evNomes,datasets:[{label:'Resultado',data:gres.map(g=>g.resultado),backgroundColor:gres.map(g=>g.resultado>=0?'#2d6a1f':'#9b2020'),borderRadius:4,borderSkipped:false}]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+(c.raw>=0?'+':'')+fmtBR(c.raw)}}},scales:{x:{ticks:{font:{size:9},maxRotation:40},grid:{display:false}},y:{ticks:{callback:v=>'R$'+(Math.abs(v)>=1000?(v/1000).toFixed(0)+'k':v),font:{size:10}},grid:{color:'rgba(0,0,0,0.04)'}}}}
-  });
 
-  // Chart status doughnut
-  if(charts.dashStatus) charts.dashStatus.destroy();
-  const sup=gastos.filter(g=>g.resultado>0).length;
-  const def=gastos.filter(g=>g.resultado<0).length;
-  const zer=gastos.filter(g=>g.resultado===0).length;
-  const sem=gastos.filter(g=>g.resultado===null||g.resultado===undefined).length;
-  const legItems=[{l:'Superávit',c:'#2d6a1f',v:sup},{l:'Déficit',c:'#9b2020',v:def},{l:'Zerado',c:'#b4b2a9',v:zer},{l:'Sem orçamento',c:'#ef9f27',v:sem}].filter(x=>x.v>0);
-  document.getElementById('leg-dash-status').innerHTML=legItems.map(x=>`<span><span class="leg-sq" style="background:${x.c}"></span>${x.l} (${x.v})</span>`).join('');
-  charts.dashStatus=new Chart(document.getElementById('ch-dash-status'),{
-    type:'doughnut',
-    data:{labels:legItems.map(x=>x.l),datasets:[{data:legItems.map(x=>x.v),backgroundColor:legItems.map(x=>x.c),borderWidth:2,borderColor:'#fff'}]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}}}
-  });
 }
 
 // ── GRÁFICOS ──
@@ -1406,9 +1369,9 @@ function renderGrafResumo(gFilt){
   gFilt.forEach(g=>{
     const ev=EVENTOS.find(e=>e.id===g.evento_id);
     const nome=ev?ev.nome:g.evento_id;
-    const res=g.resultado||0;
-    const total=g.total_evento||0;
+    const total=ITENS.filter(i=>i.evento_id===g.evento_id).reduce((s,i)=>s+(i.valor_total||0),0);
     const orc=g.orcamento||0;
+    const res=(g.orcamento||0)+(g.receita||0)-total;
 
     // CC breakdown
     const ccBreak={};
@@ -1454,6 +1417,7 @@ function renderGrafResumo(gFilt){
         <div style="font-size:11px;color:var(--text2);margin-top:2px">
           Gasto: ${fmtBR(e.total)} · Orçado: ${fmtBR(e.orc)} · Receita: ${e.receita>0?fmtBR(e.receita):'—'}
         </div>
+        ${e.receita>0?`<div style="margin-top:4px;font-size:10px;color:var(--green)">↳ ${fmtBR(e.receita)} referente à receita do evento</div>`:''}
         ${ccHtml}
       </div>`;
     });
@@ -1479,6 +1443,7 @@ function renderGrafResumo(gFilt){
         <div style="font-size:11px;color:var(--text2);margin-top:2px">
           Gasto: ${fmtBR(e.total)} · Orçado: ${fmtBR(e.orc)} · Receita: ${e.receita>0?fmtBR(e.receita):'—'}
         </div>
+        ${e.receita>0?`<div style="margin-top:4px;font-size:10px;color:var(--green)">↳ R$${fmtBR(e.receita)} referente à receita do evento</div>`:''}
         ${ccHtml}
       </div>`;
     });
@@ -1504,21 +1469,144 @@ function renderGrafResumo(gFilt){
   el.innerHTML=html;
 }
 
+
+function renderGrafDRE(gFilt){
+  const el=document.getElementById('graf-dre-content');
+  if(!el) return;
+  if(!gFilt.length){el.innerHTML='<p style="font-size:12px;color:var(--text3)">Nenhum dado para o período.</p>';return;}
+
+  const meses=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
+  // Build event rows
+  const evIds=[...new Set(gFilt.map(g=>g.evento_id))];
+  const evRows=evIds.map(evId=>{
+    const ev=EVENTOS.find(e=>e.id===evId);
+    const g=gFilt.find(x=>x.evento_id===evId)||{};
+    const mes=ev&&ev.data_ini?new Date(ev.data_ini+'T00:00:00').getMonth():-1;
+    // Use soma real das despesas (itens) em vez de total_evento do banco
+    const despReal=ITENS.filter(i=>i.evento_id===evId).reduce((s,i)=>s+(i.valor_total||0),0);
+    const desp=despReal||g.total_evento||0;
+    const orc=g.orcamento||0; const rec=g.receita||0;
+    return {nome:ev?ev.nome:evId, mes, orc, rec, desp, liq:orc+rec-desp};
+  });
+
+  // Totals per month
+  const totOrc=Array(12).fill(0);
+  const totRec=Array(12).fill(0);
+  const totDesp=Array(12).fill(0);
+  const totLiq=Array(12).fill(0);
+  evRows.forEach(r=>{
+    if(r.mes>=0){
+      totOrc[r.mes]+=r.orc;
+      totRec[r.mes]+=r.rec;
+      totDesp[r.mes]+=r.desp;
+    }
+  });
+  const totLiqCalc=meses.map((_,i)=>totOrc[i]+totRec[i]-totDesp[i]);
+
+  const ytdOrc=totOrc.reduce((s,v)=>s+v,0);
+  const ytdRec=totRec.reduce((s,v)=>s+v,0);
+  const ytdDesp=totDesp.reduce((s,v)=>s+v,0);
+  const ytdLiq=ytdOrc+ytdRec-ytdDesp;
+
+  // Only show months with data
+  const mesesAtivos=meses.map((m,i)=>({m,i})).filter(({i})=>totOrc[i]||totRec[i]||totDesp[i]);
+
+  const colStyle='padding:6px 10px;text-align:right;font-size:11px;font-family:"DM Mono",monospace;white-space:nowrap;border-bottom:1px solid var(--border)';
+  const colStyleSm='padding:4px 10px;text-align:right;font-size:10px;font-family:"DM Mono",monospace;white-space:nowrap;border-bottom:1px solid var(--border);color:var(--text2)';
+  const lblStyleSm='padding:4px 12px;font-size:10px;white-space:nowrap;border-bottom:1px solid var(--border);color:var(--text2);padding-left:22px';
+  const colHead='padding:6px 10px;text-align:right;font-size:10px;font-weight:600;color:var(--text2);white-space:nowrap;border-bottom:2px solid var(--border2)';
+  const lblStyle='padding:6px 12px;font-size:11px;white-space:nowrap;border-bottom:1px solid var(--border)';
+
+  const fv=v=>v?`<span style="color:${v<0?'var(--red)':v>0?'inherit':'var(--text3)'}">${v>=0?'':'-'}${fmtBR(Math.abs(v))}</span>`:'<span style="color:var(--text3)">—</span>';
+  const fvBold=v=>`<strong style="color:${v<0?'var(--red)':v>0?'var(--green)':'var(--text2)'}">${v>=0?'+':'-'}${fmtBR(Math.abs(v))}</strong>`;
+
+  // Build table
+  let rows='';
+
+  // Section: ORÇAMENTO
+  rows+=`<tr style="background:var(--surface2)">
+    <td style="${lblStyle};font-weight:700;color:var(--amber)">ORÇAMENTO</td>
+    ${mesesAtivos.map(({i})=>`<td style="${colStyle};color:var(--amber);font-weight:700"><strong>${totOrc[i]?fmtBR(totOrc[i]):'—'}</strong></td>`).join('')}
+    <td style="${colStyle};color:var(--amber);font-weight:700"><strong>${fmtBR(ytdOrc)}</strong></td>
+  </tr>`;
+  evRows.filter(r=>r.orc).forEach(r=>{
+    rows+=`<tr>
+      <td style="${lblStyleSm}">↳ ${r.nome}</td>
+      ${mesesAtivos.map(({i})=>`<td style="${colStyleSm}">${r.mes===i?fmtBR(r.orc):'—'}</td>`).join('')}
+      <td style="${colStyleSm}">${fmtBR(r.orc)}</td>
+    </tr>`;
+  });
+
+  // Section: RECEITA
+  rows+=`<tr style="background:var(--surface2)">
+    <td style="${lblStyle};font-weight:700;color:var(--green)">RECEITA</td>
+    ${mesesAtivos.map(({i})=>`<td style="${colStyle};color:var(--green);font-weight:700"><strong>${totRec[i]?fmtBR(totRec[i]):'—'}</strong></td>`).join('')}
+    <td style="${colStyle};color:var(--green);font-weight:700"><strong>${fmtBR(ytdRec)}</strong></td>
+  </tr>`;
+  evRows.filter(r=>r.rec).forEach(r=>{
+    rows+=`<tr>
+      <td style="${lblStyleSm}">↳ ${r.nome}</td>
+      ${mesesAtivos.map(({i})=>`<td style="${colStyleSm}">${r.mes===i?fmtBR(r.rec):'—'}</td>`).join('')}
+      <td style="${colStyleSm}">${fmtBR(r.rec)}</td>
+    </tr>`;
+  });
+
+  // Section: DESPESAS
+  rows+=`<tr style="background:var(--surface2)">
+    <td style="${lblStyle};font-weight:700;color:var(--red)">DESPESAS</td>
+    ${mesesAtivos.map(({i})=>`<td style="${colStyle};color:var(--red);font-weight:700"><strong>${totDesp[i]?fmtBR(totDesp[i]):'—'}</strong></td>`).join('')}
+    <td style="${colStyle};color:var(--red);font-weight:700"><strong>${fmtBR(ytdDesp)}</strong></td>
+  </tr>`;
+  evRows.filter(r=>r.desp).forEach(r=>{
+    rows+=`<tr>
+      <td style="${lblStyleSm}">↳ ${r.nome}</td>
+      ${mesesAtivos.map(({i})=>`<td style="${colStyleSm}">${r.mes===i?fmtBR(r.desp):'—'}</td>`).join('')}
+      <td style="${colStyleSm}">${fmtBR(r.desp)}</td>
+    </tr>`;
+  });
+
+  // Section: LÍQUIDO
+  rows+=`<tr style="background:var(--surface2);border-top:2px solid var(--border2)">
+    <td style="${lblStyle};font-weight:700;font-size:12px">LÍQUIDO (Orçamento + Receita − Despesas)</td>
+    ${mesesAtivos.map(({i})=>`<td style="${colStyle}">${fvBold(totLiqCalc[i])}</td>`).join('')}
+    <td style="${colStyle}">${fvBold(ytdLiq)}</td>
+  </tr>`;
+  evRows.filter(r=>r.rec||r.desp).forEach(r=>{
+    rows+=`<tr>
+      <td style="${lblStyle};padding-left:22px;color:var(--text2)">↳ ${r.nome}</td>
+      ${mesesAtivos.map(({i})=>`<td style="${colStyle}">${r.mes===i?fvBold(r.liq):'—'}</td>`).join('')}
+      <td style="${colStyle}">${fvBold(r.liq)}</td>
+    </tr>`;
+  });
+
+  el.innerHTML=`<table style="width:100%;border-collapse:collapse;min-width:600px">
+    <thead>
+      <tr style="background:var(--surface2)">
+        <th style="${colHead};text-align:left;min-width:200px">YTD</th>
+        ${mesesAtivos.map(({m})=>`<th style="${colHead}">${m}</th>`).join('')}
+        <th style="${colHead};color:var(--blue)">TOTAL</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
 function renderGrafKPIs(){
-  const {gastos:gf}=getFilteredData('filtro-graf');
+  const {gastos:gf,itens:itFilt}=getFilteredData('filtro-graf');
   const totO=gf.reduce((s,g)=>s+(g.orcamento||0),0);
-  const totT=gf.reduce((s,g)=>s+(g.total_evento||0),0);
+  const totT=itFilt.reduce((s,i)=>s+(i.valor_total||0),0);
   const totRec=gf.reduce((s,g)=>s+(g.receita||0),0);
-  const totRes=gf.reduce((s,g)=>s+(g.resultado||0),0);
+  const totRes=totO+totRec-totT;
   const npsEvs=gf.filter(g=>g.nps_participantes!=null);
   const npsMedia=npsEvs.length>0?(npsEvs.reduce((s,g)=>s+(g.nps_participantes||0),0)/npsEvs.length).toFixed(1)+'%':'—';
   const el=document.getElementById('graf-kpis');
   if(!el) return;
   el.innerHTML=[
     {l:'Orçamento',v:fmtBR(totO),c:'amber',s:'previsto'},
-    {l:'Total realizado',v:fmtBR(totT),c:'',s:'gasto'},
+    {l:'Despesas',v:fmtBR(totT),c:'',s:'realizado'},
     {l:'Receita',v:fmtBR(totRec),c:'green',s:'obtida'},
-    {l:'Resultado',v:(totRes>=0?'+':'')+fmtBR(totRes),c:totRes>=0?'green':'red',s:totRes>=0?'superávit':'déficit'},
+    {l:'Líquido (Orc+Rec-Desp)',v:(totRes>=0?'+':'')+fmtBR(totRes),c:totRes>=0?'green':'red',s:totRes>=0?'superávit':'déficit'},
     {l:'NPS Participantes',v:npsMedia,c:'blue',s:'média satisfação'},
   ].map(m=>`<div class="metric"><div class="metric-label">${m.l}</div><div class="metric-value ${m.c}">${m.v}</div><div class="metric-sub">${m.s}</div></div>`).join('');
 }
@@ -1543,6 +1631,7 @@ function renderGraficos(){
   document.querySelectorAll('#page-graficos .card').forEach(el=>{ if(el!==cardComp) el.style.display=''; });
   const {gastos:gFilt}=getFilteredData('filtro-graf');
   renderGrafResumo(gFilt);
+  renderGrafDRE(gFilt);
   const gcom=gFilt.filter(g=>g.total_evento||g.orcamento);
   const evN=gcom.map(g=>{const ev=EVENTOS.find(e=>e.id===g.evento_id);return ev?ev.nome:g.evento_id;});
   if(charts.orc) charts.orc.destroy();
@@ -1552,7 +1641,7 @@ function renderGraficos(){
     type:'bar',
     data:{labels:evN,datasets:[
       {label:'Orçamento',data:gcom.map(g=>g.orcamento),backgroundColor:'#b8d0f0',borderRadius:3,borderSkipped:false},
-      {label:'Realizado',data:gcom.map(g=>g.total_evento),backgroundColor:'#1a56a0',borderRadius:3,borderSkipped:false}
+      {label:'Realizado',data:gcom.map(g=>ITENS.filter(i=>i.evento_id===g.evento_id).reduce((s,i)=>s+(i.valor_total||0),0)),backgroundColor:'#1a56a0',borderRadius:3,borderSkipped:false}
     ]},
     options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+fmtBR(c.raw)}}},scales:{x:{ticks:{callback:v=>'R$'+(Math.abs(v)>=1000?(v/1000).toFixed(0)+'k':v),font:{size:10}},grid:{color:'rgba(0,0,0,0.04)'}},y:{ticks:{font:{size:10}},grid:{display:false}}}}
   });
@@ -1635,9 +1724,9 @@ function renderGraficos(){
 
 
   if(charts.efic) charts.efic.destroy();
-  const gefic=gFilt.filter(g=>g.total_evento&&g.orcamento);
+  const gefic=gFilt.filter(g=>g.orcamento);
   const evEfic=gefic.map(g=>{const ev=EVENTOS.find(e=>e.id===g.evento_id);return ev?ev.nome:g.evento_id;});
-  const pcts=gefic.map(g=>Math.round(g.total_evento/g.orcamento*100));
+  const pcts=gefic.map(g=>{const real=ITENS.filter(i=>i.evento_id===g.evento_id).reduce((s,i)=>s+(i.valor_total||0),0);return Math.round(real/g.orcamento*100);});
   charts.efic=new Chart(document.getElementById('ch-efic'),{
     type:'bar',
     data:{labels:evEfic,datasets:[{label:'%',data:pcts,backgroundColor:pcts.map(p=>p<=100?'#2d6a1f':'#9b2020'),borderRadius:3,borderSkipped:false}]},
@@ -2712,10 +2801,12 @@ function renderControleKPIs(){
   const totS=gf.reduce((s,g)=>s+(g.staff||0),0);
   const totI=gf.reduce((s,g)=>s+(g.inscritos||0),0);
   const totP=gf.reduce((s,g)=>s+(g.pagantes||0),0);
-  const totT=gf.reduce((s,g)=>s+(g.total_evento||0),0);
+  const evIdsFilt=new Set(gf.map(g=>g.evento_id));
+  const itensFilt=ITENS.filter(i=>evIdsFilt.has(i.evento_id));
+  const totT=itensFilt.reduce((s,i)=>s+(i.valor_total||0),0);
   const totO=gf.reduce((s,g)=>s+(g.orcamento||0),0);
   const totRec=gf.reduce((s,g)=>s+(g.receita||0),0);
-  const totR=gf.reduce((s,g)=>s+(g.resultado||0),0);
+  const totR=totO+totRec-totT;
   document.getElementById('ctrl-kpis').innerHTML=[
     {l:'Staff',v:fmtN(totS),c:'blue',s:'acumulado'},
     {l:'NPS Participantes',v:gf.filter(g=>g.nps_participantes!=null).length>0?(gf.reduce((s,g)=>s+(g.nps_participantes||0),0)/gf.filter(g=>g.nps_participantes!=null).length).toFixed(1)+'%':'—',c:'blue',s:'média satisfação'},
@@ -2724,7 +2815,7 @@ function renderControleKPIs(){
     {l:'Gasto total',v:fmtBR(totT),c:'',s:'realizado'},
     {l:'Orçamento',v:fmtBR(totO),c:'amber',s:'previsto'},
     {l:'Receita total',v:fmtBR(totRec),c:'green',s:'obtida'},
-    {l:'Resultado',v:(totR>=0?'+':'')+fmtBR(totR),c:totR>=0?'green':'red',s:totR>=0?'superávit':'déficit'},
+    {l:'Líquido (Orc+Rec-Desp)',v:(totR>=0?'+':'')+fmtBR(totR),c:totR>=0?'green':'red',s:totR>=0?'superávit':'déficit'},
   ].map(m=>`<div class="metric"><div class="metric-label">${m.l}</div><div class="metric-value ${m.c}">${m.v}</div><div class="metric-sub">${m.s}</div></div>`).join('');
 }
 function renderControleTabela(){
