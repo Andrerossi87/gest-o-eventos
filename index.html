@@ -327,8 +327,14 @@ tr.item-pendente:hover td{background:#fff5dc;}
               <option value="">Todos</option>
             </select>
           </div>
+          <div class="ph-filter">
+            <label>Centro de custo</label>
+            <select id="filtro-dash" onchange="renderDashboard()">
+              <option value="">Todos</option>
+            </select>
+          </div>
           <div class="ctrl-filter-wrap" id="dash-ev-filter-wrap">
-            <button class="ctrl-filter-btn" id="dash-ev-filter-btn" onclick="toggleDashEvFilter()" style="min-width:180px">
+            <button class="ctrl-filter-btn" id="dash-ev-filter-btn" onclick="toggleDashEvFilter()" style="min-width:160px">
               <span id="dash-ev-filter-label">Todos os eventos</span>
               <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
             </button>
@@ -371,8 +377,14 @@ tr.item-pendente:hover td{background:#fff5dc;}
               <option value="">Todos</option>
             </select>
           </div>
+          <div class="ph-filter">
+            <label>Centro de custo</label>
+            <select id="filtro-graf" onchange="renderGraficos()">
+              <option value="">Todos</option>
+            </select>
+          </div>
           <div class="ctrl-filter-wrap" id="graf-ev-filter-wrap">
-            <button class="ctrl-filter-btn" id="graf-ev-filter-btn" onclick="toggleGrafEvFilter()" style="min-width:180px">
+            <button class="ctrl-filter-btn" id="graf-ev-filter-btn" onclick="toggleGrafEvFilter()" style="min-width:160px">
               <span id="graf-ev-filter-label">Todos os eventos</span>
               <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
             </button>
@@ -1008,6 +1020,114 @@ document.addEventListener('click',e=>{
   if(gw&&!gw.contains(e.target)&&grafEvOpen){grafEvOpen=false;document.getElementById('graf-ev-filter-dropdown').classList.remove('open');}
 });
 
+
+
+// ── FILTRO EVENTO GRÁFICOS ──
+let grafEvFiltro = new Set();
+let grafEvOpen = false;
+
+function toggleGrafEvFilter(){
+  grafEvOpen=!grafEvOpen;
+  document.getElementById('graf-ev-filter-dropdown').classList.toggle('open',grafEvOpen);
+  if(grafEvOpen){
+    buildGrafEvList('');
+    document.getElementById('graf-ev-filter-search').value='';
+    document.getElementById('graf-ev-filter-search').focus();
+  }
+}
+document.addEventListener('click',e=>{
+  const wrap=document.getElementById('graf-ev-filter-wrap');
+  if(wrap&&!wrap.contains(e.target)&&grafEvOpen){
+    grafEvOpen=false;
+    document.getElementById('graf-ev-filter-dropdown').classList.remove('open');
+  }
+});
+function buildGrafEvList(search){
+  const list=document.getElementById('graf-ev-filter-list'); if(!list) return;
+  const evs=search
+    ? EVENTOS.filter(e=>e.nome.toLowerCase().includes(search.toLowerCase()))
+    : [...EVENTOS].sort((a,b)=>new Date(b.data_ini+'T00:00:00')-new Date(a.data_ini+'T00:00:00'));
+  if(!evs.length){list.innerHTML='<div style="padding:10px 12px;font-size:12px;color:var(--text3)">Nenhum encontrado</div>';return;}
+  list.innerHTML=evs.map(ev=>`
+    <label class="ctrl-filter-item">
+      <input type="checkbox" value="${ev.id}" ${grafEvFiltro.has(ev.id)?'checked':''}
+        onchange="toggleGrafEvItem('${ev.id}',this.checked)"/>
+      <span style="flex:1">${ev.nome}</span>
+      <span style="font-size:10px;color:var(--text3)">${fmtDate(ev.data_ini)}</span>
+    </label>`).join('');
+}
+function filtrarGrafEvSearch(val){buildGrafEvList(val);}
+function toggleGrafEvItem(id,checked){
+  if(checked) grafEvFiltro.add(id); else grafEvFiltro.delete(id);
+}
+function limparGrafEvFiltro(){
+  grafEvFiltro.clear();
+  buildGrafEvList('');
+  aplicarGrafEvFiltro();
+}
+function aplicarGrafEvFiltro(){
+  grafEvOpen=false;
+  document.getElementById('graf-ev-filter-dropdown').classList.remove('open');
+  const label=document.getElementById('graf-ev-filter-label');
+  const btn=document.getElementById('graf-ev-filter-btn');
+  if(grafEvFiltro.size===0){label.textContent='Todos os eventos';btn.classList.remove('active');}
+  else{label.textContent=`${grafEvFiltro.size} evento${grafEvFiltro.size>1?'s':''} selecionado${grafEvFiltro.size>1?'s':''}`;btn.classList.add('active');}
+  renderGraficos();
+}
+
+// ── FILTRO EVENTO DASHBOARD ──
+let dashEvFiltro = new Set();
+let dashEvOpen = false;
+
+function toggleDashEvFilter(){
+  dashEvOpen=!dashEvOpen;
+  document.getElementById('dash-ev-filter-dropdown').classList.toggle('open',dashEvOpen);
+  if(dashEvOpen){
+    buildDashEvList('');
+    document.getElementById('dash-ev-filter-search').value='';
+    document.getElementById('dash-ev-filter-search').focus();
+  }
+}
+document.addEventListener('click',e=>{
+  const wrap=document.getElementById('dash-ev-filter-wrap');
+  if(wrap&&!wrap.contains(e.target)&&dashEvOpen){
+    dashEvOpen=false;
+    document.getElementById('dash-ev-filter-dropdown').classList.remove('open');
+  }
+});
+function buildDashEvList(search){
+  const list=document.getElementById('dash-ev-filter-list'); if(!list) return;
+  const evs=search
+    ? EVENTOS.filter(e=>e.nome.toLowerCase().includes(search.toLowerCase()))
+    : [...EVENTOS].sort((a,b)=>new Date(b.data_ini+'T00:00:00')-new Date(a.data_ini+'T00:00:00'));
+  if(!evs.length){list.innerHTML='<div style="padding:10px 12px;font-size:12px;color:var(--text3)">Nenhum encontrado</div>';return;}
+  list.innerHTML=evs.map(ev=>`
+    <label class="ctrl-filter-item">
+      <input type="checkbox" value="${ev.id}" ${dashEvFiltro.has(ev.id)?'checked':''}
+        onchange="toggleDashEvItem('${ev.id}',this.checked)"/>
+      <span style="flex:1">${ev.nome}</span>
+      <span style="font-size:10px;color:var(--text3)">${fmtDate(ev.data_ini)}</span>
+    </label>`).join('');
+}
+function filtrarDashEvSearch(val){buildDashEvList(val);}
+function toggleDashEvItem(id,checked){
+  if(checked) dashEvFiltro.add(id); else dashEvFiltro.delete(id);
+}
+function limparDashEvFiltro(){
+  dashEvFiltro.clear();
+  buildDashEvList('');
+  aplicarDashEvFiltro();
+}
+function aplicarDashEvFiltro(){
+  dashEvOpen=false;
+  document.getElementById('dash-ev-filter-dropdown').classList.remove('open');
+  const label=document.getElementById('dash-ev-filter-label');
+  const btn=document.getElementById('dash-ev-filter-btn');
+  if(dashEvFiltro.size===0){label.textContent='Todos os eventos';btn.classList.remove('active');}
+  else{label.textContent=`${dashEvFiltro.size} evento${dashEvFiltro.size>1?'s':''} selecionado${dashEvFiltro.size>1?'s':''}`;btn.classList.add('active');}
+  renderDashboard();
+}
+
 // ── DASHBOARD ──
 function getAnoEv(ev){ return ev.ano||new Date(ev.data_ini+'T00:00:00').getFullYear(); }
 function getCCOptions(){
@@ -1023,8 +1143,14 @@ function getAnoOptions(){
   return ['', ...Array.from(anos).sort((a,b)=>b-a)];
 }
 function populateCCFilters(){
-  // Only update Ano selects
+  const ccOpts=getCCOptions();
   const anoOpts=getAnoOptions();
+  ['filtro-dash','filtro-graf'].forEach(id=>{
+    const sel=document.getElementById(id); if(!sel) return;
+    const cur=sel.value;
+    sel.innerHTML=ccOpts.map(v=>`<option value="${v}">${v===''?'Todos':v}</option>`).join('');
+    if(cur&&ccOpts.includes(cur)) sel.value=cur;
+  });
   ['filtro-dash-ano','filtro-graf-ano'].forEach(id=>{
     const sel=document.getElementById(id); if(!sel) return;
     const cur=sel.value;
@@ -1033,13 +1159,26 @@ function populateCCFilters(){
   });
 }
 function getFilteredData(filtroId){
-  const isDash=filtroId==='filtro-dash';
-  const evFiltro=isDash?dashEvFiltro:grafEvFiltro;
-  const anoSelId=isDash?'filtro-dash-ano':'filtro-graf-ano';
+  const cc=document.getElementById(filtroId)?.value||'';
+  const anoSelId=filtroId==='filtro-dash'?'filtro-dash-ano':'filtro-graf-ano';
   const ano=document.getElementById(anoSelId)?.value||'';
   let evs=EVENTOS;
   if(ano) evs=evs.filter(e=>String(getAnoEv(e))===String(ano));
-  if(evFiltro&&evFiltro.size>0) evs=evs.filter(e=>evFiltro.has(e.id));
+  // Apply event filter
+  if(filtroId==='filtro-dash'&&dashEvFiltro&&dashEvFiltro.size>0){
+    evs=evs.filter(e=>dashEvFiltro.has(e.id));
+  }
+  if(filtroId==='filtro-graf'&&grafEvFiltro&&grafEvFiltro.size>0){
+    evs=evs.filter(e=>grafEvFiltro.has(e.id));
+  }
+  if(cc){
+    const evIdsWithCC=new Set(ITENS.filter(i=>{
+      if(i.centro_custo===cc) return true;
+      if(i.rateio){try{return JSON.parse(i.rateio).some(r=>r.cc===cc);}catch(e){}}
+      return false;
+    }).map(i=>i.evento_id));
+    evs=evs.filter(e=>evIdsWithCC.has(e.id));
+  }
   const evIds=new Set(evs.map(e=>e.id));
   return {evs,gastos:GASTOS.filter(g=>evIds.has(g.evento_id)),itens:ITENS.filter(i=>evIds.has(i.evento_id))};
 }
@@ -1094,14 +1233,8 @@ function renderDashboard(){
 
 function renderComparativoAnual(){
   const cc=document.getElementById('filtro-graf')?.value||'';
-  let evs=EVENTOS;
-  if(cc){
-    const evIdsWithCC=new Set(ITENS.filter(i=>{
-      if(i.centro_custo===cc) return true;
-      if(i.rateio){try{return JSON.parse(i.rateio).some(r=>r.cc===cc);}catch(e){}}
-      return false;
-    }).map(i=>i.evento_id));
-  
+  let evs=grafEvFiltro&&grafEvFiltro.size>0?EVENTOS.filter(e=>grafEvFiltro.has(e.id)):[...EVENTOS];
+  if(cc) evs=evs.filter(e=>e.centro_custo===cc);
   const evIds=new Set(evs.map(e=>e.id));
   const gastosFilt=GASTOS.filter(g=>evIds.has(g.evento_id));
 
@@ -1463,7 +1596,7 @@ function buildEvFilterList(search){
     <label class="ctrl-filter-item">
       <input type="checkbox" value="${ev.id}" ${evFiltroSelecionados.has(ev.id)?'checked':''}
         onchange="toggleEvItem('${ev.id}',this.checked)"/>
-      <span>${ev.nome} <span style="font-size:10px;color:var(--text3)">${ev.data_ini?ev.data_ini.split('-').reverse().join('/'):''})</span></span>
+      <span>${ev.nome} <span style="font-size:10px;color:var(--text3)">${ev.data_ini?ev.data_ini.split('-').reverse().join('/'):''}</span></span>
     </label>
   `).join('');
 }
