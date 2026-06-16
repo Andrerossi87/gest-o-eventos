@@ -187,6 +187,13 @@ tr:hover td{background:var(--surface2);}
 .ro-badge{font-size:10px;background:var(--purple-bg);color:var(--purple);padding:2px 7px;border-radius:20px;font-weight:500;margin-left:8px;}
 .obs-row{background:var(--surface2);display:none;}
 .exec-check{display:flex;align-items:center;gap:5px;cursor:pointer;font-size:11px;}
+.status-pill{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:500;cursor:pointer;border:none;transition:all .15s;}
+.status-pill.ok{background:var(--green-bg);color:var(--green);}
+.status-pill.pend{background:var(--red-bg);color:var(--red);}
+.status-pill:hover{opacity:.8;}
+.pend-alert{background:var(--amber-bg);border:1px solid #f0cc80;border-radius:var(--r);padding:12px 16px;margin-bottom:12px;font-size:12px;}
+.pend-alert-title{font-weight:600;color:var(--amber);margin-bottom:6px;}
+.pend-alert-item{color:var(--text);margin-bottom:2px;}
 .exec-check input{accent-color:var(--green);width:14px;height:14px;cursor:pointer;}
 .exec-check.done{color:var(--green);}
 .exec-check.pending{color:var(--amber);}
@@ -362,6 +369,16 @@ tr.item-pendente:hover td{background:#fff5dc;}
             </select>
           </div>
           <input type="hidden" id="filtro-graf"/>
+          <div style="display:flex;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:3px;gap:2px">
+            <button id="graf-modo-receita" onclick="setGrafModo('receita')"
+              style="padding:5px 14px;border-radius:6px;border:none;font-size:12px;font-weight:500;cursor:pointer;transition:all .15s;background:var(--blue);color:#fff">
+              Receita × Realizado
+            </button>
+            <button id="graf-modo-orc" onclick="setGrafModo('orc')"
+              style="padding:5px 14px;border-radius:6px;border:none;font-size:12px;font-weight:500;cursor:pointer;transition:all .15s;background:transparent;color:var(--text2)">
+              Orçamento × Realizado
+            </button>
+          </div>
           <div class="ctrl-filter-wrap" id="graf-ev-filter-wrap">
             <button class="ctrl-filter-btn" id="graf-ev-filter-btn" onclick="toggleGrafEvFilter()" style="min-width:160px">
               <span id="graf-ev-filter-label">Todos os eventos</span>
@@ -542,7 +559,7 @@ tr.item-pendente:hover td{background:#fff5dc;}
               <th style="width:18%">Item</th><th style="width:7%">Qtd</th><th style="width:6%">Diárias</th>
               <th style="width:10%">Valor médio</th><th style="width:9%">Total</th>
               <th style="width:13%">Centro de custo</th><th style="width:5%">%</th>
-              <th style="width:6%">Exec.</th><th style="width:12%">Observação</th><th style="width:8%">Por</th><th style="width:8%"></th>
+              <th style="width:5%">Exec.</th><th style="width:5%">NF</th><th style="width:5%">Cont.</th><th style="width:8%">Forn.</th><th style="width:10%">Observação</th><th style="width:7%">Por</th><th style="width:7%"></th>
             </tr></thead>
             <tbody id="tb-itens"></tbody>
           </table>
@@ -1158,6 +1175,45 @@ function aplicarGrafEvFiltro(){
   renderGraficos();
 }
 
+
+// ── MODO GRÁFICO ──
+let grafModo = 'receita'; // 'receita' ou 'orc'
+
+function setGrafModo(modo){
+  grafModo = modo;
+  const btnRec = document.getElementById('graf-modo-receita');
+  const btnOrc = document.getElementById('graf-modo-orc');
+  if(btnRec && btnOrc){
+    if(modo==='receita'){
+      btnRec.style.background='var(--blue)'; btnRec.style.color='#fff';
+      btnOrc.style.background='transparent'; btnOrc.style.color='var(--text2)';
+    } else {
+      btnOrc.style.background='var(--blue)'; btnOrc.style.color='#fff';
+      btnRec.style.background='transparent'; btnRec.style.color='var(--text2)';
+    }
+  }
+  renderGraficos();
+}
+
+function getGastosPorModo(gFilt){
+  if(grafModo==='receita'){
+    // Eventos COM receita → cálculo: Receita - Despesas
+    return gFilt.filter(g=>g.receita&&g.receita>0);
+  } else {
+    // Eventos SEM receita → cálculo: Orçamento - Despesas
+    return gFilt.filter(g=>!g.receita||g.receita===0);
+  }
+}
+
+function getLiquidoPorModo(g){
+  const desp = ITENS.filter(i=>i.evento_id===g.evento_id).reduce((s,i)=>s+(i.valor_total||0),0);
+  if(grafModo==='receita'){
+    return (g.receita||0) - desp;
+  } else {
+    return (g.orcamento||0) - desp;
+  }
+}
+
 // ── FILTRO EVENTO DASHBOARD ──
 
 function toggleDashEvFilter(){
@@ -1371,7 +1427,7 @@ function renderGrafResumo(gFilt){
     const nome=ev?ev.nome:g.evento_id;
     const total=ITENS.filter(i=>i.evento_id===g.evento_id).reduce((s,i)=>s+(i.valor_total||0),0);
     const orc=g.orcamento||0;
-    const res=(g.orcamento||0)+(g.receita||0)-total;
+    const res=getLiquidoPorModo(g);
 
     // CC breakdown
     const ccBreak={};
@@ -1487,7 +1543,8 @@ function renderGrafDRE(gFilt){
     const despReal=ITENS.filter(i=>i.evento_id===evId).reduce((s,i)=>s+(i.valor_total||0),0);
     const desp=despReal||g.total_evento||0;
     const orc=g.orcamento||0; const rec=g.receita||0;
-    return {nome:ev?ev.nome:evId, mes, orc, rec, desp, liq:orc+rec-desp};
+    const liq=grafModo==='receita'?rec-desp:orc-desp;
+    return {nome:ev?ev.nome:evId, mes, orc, rec, desp, liq};
   });
 
   // Totals per month
@@ -1502,12 +1559,12 @@ function renderGrafDRE(gFilt){
       totDesp[r.mes]+=r.desp;
     }
   });
-  const totLiqCalc=meses.map((_,i)=>totOrc[i]+totRec[i]-totDesp[i]);
+  const totLiqCalc=meses.map((_,i)=>grafModo==='receita'?totRec[i]-totDesp[i]:totOrc[i]-totDesp[i]);
 
   const ytdOrc=totOrc.reduce((s,v)=>s+v,0);
   const ytdRec=totRec.reduce((s,v)=>s+v,0);
   const ytdDesp=totDesp.reduce((s,v)=>s+v,0);
-  const ytdLiq=ytdOrc+ytdRec-ytdDesp;
+  const ytdLiq=grafModo==='receita'?ytdRec-ytdDesp:ytdOrc-ytdDesp;
 
   // Only show months with data
   const mesesAtivos=meses.map((m,i)=>({m,i})).filter(({i})=>totOrc[i]||totRec[i]||totDesp[i]);
@@ -1568,7 +1625,7 @@ function renderGrafDRE(gFilt){
 
   // Section: LÍQUIDO
   rows+=`<tr style="background:var(--surface2);border-top:2px solid var(--border2)">
-    <td style="${lblStyle};font-weight:700;font-size:12px">LÍQUIDO (Orçamento + Receita − Despesas)</td>
+    <td style="${lblStyle};font-weight:700;font-size:12px">LÍQUIDO (${grafModo==='receita'?'Receita':'Orçamento'} − Despesas)</td>
     ${mesesAtivos.map(({i})=>`<td style="${colStyle}">${fvBold(totLiqCalc[i])}</td>`).join('')}
     <td style="${colStyle}">${fvBold(ytdLiq)}</td>
   </tr>`;
@@ -1593,11 +1650,15 @@ function renderGrafDRE(gFilt){
 }
 
 function renderGrafKPIs(){
-  const {gastos:gf,itens:itFilt}=getFilteredData('filtro-graf');
+  const {gastos:gfAll,itens:itFilt}=getFilteredData('filtro-graf');
+  const gf=getGastosPorModo(gfAll);
+  const evIdsModo=new Set(gf.map(g=>g.evento_id));
+  const itensModo=ITENS.filter(i=>evIdsModo.has(i.evento_id));
   const totO=gf.reduce((s,g)=>s+(g.orcamento||0),0);
-  const totT=itFilt.reduce((s,i)=>s+(i.valor_total||0),0);
+  const totT=itensModo.reduce((s,i)=>s+(i.valor_total||0),0);
   const totRec=gf.reduce((s,g)=>s+(g.receita||0),0);
-  const totRes=totO+totRec-totT;
+  const totRes=grafModo==='receita'?totRec-totT:totO-totT;
+  const baseLabel=grafModo==='receita'?'Receita − Despesas':'Orçamento − Despesas';
   const npsEvs=gf.filter(g=>g.nps_participantes!=null);
   const npsMedia=npsEvs.length>0?(npsEvs.reduce((s,g)=>s+(g.nps_participantes||0),0)/npsEvs.length).toFixed(1)+'%':'—';
   const el=document.getElementById('graf-kpis');
@@ -1629,7 +1690,8 @@ function renderGraficos(){
   cardComp.style.display='none';
   // Restore normal chart cards
   document.querySelectorAll('#page-graficos .card').forEach(el=>{ if(el!==cardComp) el.style.display=''; });
-  const {gastos:gFilt}=getFilteredData('filtro-graf');
+  const {gastos:gFiltAll}=getFilteredData('filtro-graf');
+  const gFilt=getGastosPorModo(gFiltAll);
   renderGrafResumo(gFilt);
   renderGrafDRE(gFilt);
   const gcom=gFilt.filter(g=>g.total_evento||g.orcamento);
@@ -1660,14 +1722,17 @@ function renderGraficos(){
   });
   // ── Pizza: Orçado × Realizado × Receita ──
   if(charts.pizzaOrc) charts.pizzaOrc.destroy();
+  const evIdsPizza=new Set(gFilt.map(g=>g.evento_id));
+  const itensPizza=ITENS.filter(i=>evIdsPizza.has(i.evento_id));
   const totOrcP=gFilt.reduce((s,g)=>s+(g.orcamento||0),0);
-  const totRealP=gFilt.reduce((s,g)=>s+(g.total_evento||0),0);
+  const totRealP=itensPizza.reduce((s,i)=>s+(i.valor_total||0),0);
   const totRecP=gFilt.reduce((s,g)=>s+(g.receita||0),0);
-  const totSomP=totOrcP+totRealP+totRecP;
+  const baseP=grafModo==='receita'?totRecP:totOrcP;
+  const totSomP=baseP+totRealP;
   const legPizza=document.getElementById('leg-pizza-orc');
-  const pizzaLabels=['Orçado','Realizado','Receita'];
-  const pizzaData=[totOrcP,totRealP,totRecP];
-  const pizzaCores=['#b8d0f0','#1a56a0','#2d6a1f'];
+  const pizzaLabels=grafModo==='receita'?['Receita','Despesas']:['Orçamento','Despesas'];
+  const pizzaData=[baseP,totRealP];
+  const pizzaCores=grafModo==='receita'?['#2d6a1f','#1a56a0']:['#b8d0f0','#1a56a0'];
   if(legPizza) legPizza.innerHTML=pizzaLabels.map((l,i)=>{
     const pct=totSomP>0?Math.round(pizzaData[i]/totSomP*100):0;
     return `<span><span class="leg-sq" style="background:${pizzaCores[i]}"></span>${l} ${pct}%</span>`;
@@ -2153,6 +2218,11 @@ function abrirModalItem(){
   document.getElementById('mitem-ac-dropdown').classList.remove('open');
   acSuggestions=[];acSelected=-1;
   document.getElementById('mitem-id').value='';
+  const _forn=document.getElementById('mitem-fornecedor'); if(_forn) _forn.value='';
+  const _nf=document.getElementById('mitem-nf'); if(_nf) _nf.checked=false;
+  const _nfl=document.getElementById('mitem-nf-label'); if(_nfl) _nfl.textContent='Pendente';
+  const _ct=document.getElementById('mitem-contrato'); if(_ct) _ct.checked=false;
+  const _ctl=document.getElementById('mitem-contrato-label'); if(_ctl) _ctl.textContent='Pendente';
   initRateio([]);
   document.getElementById('item-calc').innerHTML='Total: <strong>R$ 0,00</strong>';
   // Mostrar evento fixo ou select
@@ -2226,6 +2296,11 @@ function editarItem(id){
   document.getElementById('mitem-vmed').value = vmedVal>0?parseFloat(vmedVal).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'';
   document.getElementById('mitem-obs').value = it.obs||'';
   document.getElementById('mitem-id').value = id;
+  document.getElementById('mitem-fornecedor').value = it.fornecedor||'';
+  const nfEl=document.getElementById('mitem-nf');
+  const cEl=document.getElementById('mitem-contrato');
+  if(nfEl){nfEl.checked=!!it.nota_fiscal;document.getElementById('mitem-nf-label').textContent=it.nota_fiscal?'Recebida ✓':'Pendente';}
+  if(cEl){cEl.checked=!!it.contrato;document.getElementById('mitem-contrato-label').textContent=it.contrato?'Assinado ✓':'Pendente';}
   // Load rateio
   let rateio = [];
   if(it.rateio){ try{ rateio=JSON.parse(it.rateio); }catch(e){} }
@@ -2237,6 +2312,46 @@ function editarItem(id){
   document.getElementById('modal-item').classList.add('open');
 }
 
+
+
+async function toggleItemField(id, field, value){
+  const it=ITENS.find(i=>i.id===id);
+  if(it) it[field]=value;
+  await sbQuery(()=>sb.from('itens_orcamento').update({[field]:value}).eq('id',id));
+  renderOrcamento();
+  verificarPendencias();
+}
+
+function verificarPendencias(){
+  const alertDiv=document.getElementById('orc-alerta');
+  if(!alertDiv) return;
+  const evsSel=EVENTOS.filter(e=>orcFiltroSelecionados.has(e.id));
+  if(!evsSel.length) return;
+  const itensSel=ITENS.filter(i=>orcFiltroSelecionados.has(i.evento_id));
+  const pendentes=itensSel.filter(i=>!i.executado||!i.nota_fiscal||!i.contrato||!i.fornecedor);
+  if(!pendentes.length){
+    // Remove pendencia alert if exists
+    const existing=document.getElementById('pend-alert');
+    if(existing) existing.remove();
+    return;
+  }
+  const msgs=pendentes.map(i=>{
+    const falta=[];
+    if(!i.executado) falta.push('execução');
+    if(!i.nota_fiscal) falta.push('NF');
+    if(!i.contrato) falta.push('contrato');
+    if(!i.fornecedor) falta.push('fornecedor');
+    return `<div class="pend-alert-item">⚠️ <strong>${i.nome}</strong> — pendente: ${falta.join(', ')}</div>`;
+  }).join('');
+  let existing=document.getElementById('pend-alert');
+  if(!existing){
+    existing=document.createElement('div');
+    existing.id='pend-alert';
+    existing.className='pend-alert';
+    alertDiv.after(existing);
+  }
+  existing.innerHTML=`<div class="pend-alert-title">⚠️ ${pendentes.length} item${pendentes.length>1?'s':''} com pendência${pendentes.length>1?'s':''}</div>${msgs}`;
+}
 
 async function toggleExecutado(id, checked){
   // Update locally
@@ -2448,6 +2563,7 @@ function renderOrcamento(){
   const itens=ITENS.filter(i=>orcFiltroSelecionados.has(i.evento_id));
   const total=itens.reduce((s,i)=>s+(i.valor_total||0),0);
   const titulo=evsSel.length===1?evsSel[0].nome:`${evsSel.length} eventos selecionados`;
+  verificarPendencias();
   document.getElementById('orc-title').textContent=`${itens.length} item${itens.length!==1?'s':''} — ${titulo}`;
   document.getElementById('orc-total').textContent=`Total: ${fmtBR(total)}`;
   card.style.display='block';
@@ -2473,6 +2589,9 @@ function renderOrcamento(){
     <td style="font-size:10px;color:var(--text2);white-space:normal">${renderRateioCell(it)}</td>
     <td style="font-size:11px;text-align:center">${renderPctCell(it)}</td>
     <td style="text-align:center">${execCell}</td>
+    <td style="text-align:center">${canEdit?`<button class="status-pill ${it.nota_fiscal?'ok':'pend'}" onclick="toggleItemField('${it.id}','nota_fiscal',${!it.nota_fiscal})" title="${it.nota_fiscal?'NF recebida':'NF pendente'}">${it.nota_fiscal?'✓':'⏳'}</button>`:(it.nota_fiscal?'<span style="color:var(--green)">✓</span>':'—')}</td>
+    <td style="text-align:center">${canEdit?`<button class="status-pill ${it.contrato?'ok':'pend'}" onclick="toggleItemField('${it.id}','contrato',${!it.contrato})" title="${it.contrato?'Contrato assinado':'Contrato pendente'}">${it.contrato?'✓':'⏳'}</button>`:(it.contrato?'<span style="color:var(--green)">✓</span>':'—')}</td>
+    <td style="font-size:11px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100px" title="${it.fornecedor||''}">${it.fornecedor||'—'}</td>
     <td style="font-size:11px;color:var(--text2);white-space:normal">${it.obs||''}</td>
     <td style="font-size:11px;color:var(--text2)">${it.user_nome||'—'}</td>
     <td style="white-space:nowrap;min-width:80px">${canEdit?`<button class="btn btn-ghost btn-sm" onclick="editarItem('${it.id}')" style="margin-right:4px">✎</button><button class="btn btn-danger btn-sm" onclick="excluirItem('${it.id}')">✕</button>`:'—'}</td>
@@ -2613,14 +2732,12 @@ function autoAno(){
 async function sincronizarTotalOrcamento(evId){
   if(!evId) return;
   const total = getTotalOrcamento(evId);
-  // Find existing gasto record for this event
   const gasto = GASTOS.find(g=>g.evento_id===evId);
   if(gasto){
-    // Update existing record
     gasto.total_evento = total;
-    await sbQuery(()=>sb.from('controle_gastos').update({total_evento:total}).eq('id',gasto.id));
+    // Fire and forget — don't block UI
+    sbQuery(()=>sb.from('controle_gastos').update({total_evento:total}).eq('id',gasto.id));
   }
-  // If no record exists, don't create one — user fills other fields manually first
 }
 
 function getTotalOrcamento(evId){
@@ -2917,6 +3034,14 @@ async function sbQuery(fn){
   }
   return resultado;
 }
+
+// ── CHECKBOX LABELS ──
+document.addEventListener('DOMContentLoaded',()=>{
+  const nfEl=document.getElementById('mitem-nf');
+  const cEl=document.getElementById('mitem-contrato');
+  if(nfEl) nfEl.addEventListener('change',()=>document.getElementById('mitem-nf-label').textContent=nfEl.checked?'Recebida ✓':'Pendente');
+  if(cEl) cEl.addEventListener('change',()=>document.getElementById('mitem-contrato-label').textContent=cEl.checked?'Assinado ✓':'Pendente');
+});
 
 // ── START ──
 init();
