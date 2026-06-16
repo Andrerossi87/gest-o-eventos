@@ -683,7 +683,24 @@ tr.item-pendente:hover td{background:#fff5dc;}
         Adicionar centro de custo
       </button>
     </div>
-    <div class="fg form-row" style="margin-top:10px"><label>Observações</label><textarea id="mitem-obs" placeholder="Alguma observação sobre este item..." style="min-height:48px"></textarea></div>
+    <div class="fg form-row" style="margin-top:10px"><label>Fornecedor</label><input id="mitem-fornecedor" type="text" placeholder="Nome do fornecedor"/></div>
+    <div class="fgrid c2 form-row">
+      <div class="fg">
+        <label>Nota fiscal</label>
+        <label style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border2);border-radius:8px;cursor:pointer">
+          <input type="checkbox" id="mitem-nf" style="accent-color:var(--green);width:16px;height:16px"/>
+          <span style="font-size:12px" id="mitem-nf-label">Pendente</span>
+        </label>
+      </div>
+      <div class="fg">
+        <label>Contrato</label>
+        <label style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border2);border-radius:8px;cursor:pointer">
+          <input type="checkbox" id="mitem-contrato" style="accent-color:var(--green);width:16px;height:16px"/>
+          <span style="font-size:12px" id="mitem-contrato-label">Pendente</span>
+        </label>
+      </div>
+    </div>
+    <div class="fg form-row"><label>Observações</label><textarea id="mitem-obs" placeholder="Alguma observação sobre este item..." style="min-height:48px"></textarea></div>
     <div class="calc-box" id="item-calc">Total: <strong>R$ 0,00</strong></div>
     <input type="hidden" id="mitem-id"/>
     <div class="modal-actions">
