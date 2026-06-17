@@ -2352,7 +2352,7 @@ function verificarPendencias(){
     if(!i.nota_fiscal) falta.push('NF');
     if(!i.contrato) falta.push('contrato');
     if(!i.fornecedor) falta.push('fornecedor');
-    return `<div class="pend-alert-item">⚠️ <strong>${i.nome}</strong> — pendente: ${falta.join(', ')}</div>`;
+    return `<div class="pend-alert-item">⚠️ <strong>${i.nome}</strong> — pendente: ${falta.map(f=>`<strong>${f}</strong>`).join(', ')}</div>`;
   }).join('');
   let existing=document.getElementById('pend-alert');
   if(!existing){
