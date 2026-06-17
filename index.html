@@ -2271,7 +2271,9 @@ async function salvarItem(){
   const cc=rateio.length>0?rateio[0].cc:null;
   const pct=rateio.length>0?rateio[0].pct:null;
   const obs=document.getElementById('mitem-obs').value.trim();
-  const payload={evento_id:evId,nome,qtd,diarias:dias,valor_medio:vmed,valor_total:vtot,centro_custo:cc,percentual:pct,rateio:rateio.length>0?JSON.stringify(rateio):null,obs:obs||null,user_id:USER.id,user_nome:PERFIL.nome||USER.email};
+  const fornEl=document.getElementById('mitem-fornecedor');
+  const fornecedor=fornEl?fornEl.value.trim():'';
+  const payload={evento_id:evId,nome,qtd,diarias:dias,valor_medio:vmed,valor_total:vtot,centro_custo:cc,percentual:pct,rateio:rateio.length>0?JSON.stringify(rateio):null,obs:obs||null,fornecedor:fornecedor||null,user_id:USER.id,user_nome:PERFIL.nome||USER.email};
   const resItem = await sbQuery(()=> editId
     ? sb.from('itens_orcamento').update(payload).eq('id',editId)
     : sb.from('itens_orcamento').insert(payload)
