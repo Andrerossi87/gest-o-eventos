@@ -684,22 +684,6 @@ tr.item-pendente:hover td{background:#fff5dc;}
       </button>
     </div>
     <div class="fg form-row" style="margin-top:10px"><label>Fornecedor</label><input id="mitem-fornecedor" type="text" placeholder="Nome do fornecedor"/></div>
-    <div class="fgrid c2 form-row">
-      <div class="fg">
-        <label>Nota fiscal</label>
-        <label style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border2);border-radius:8px;cursor:pointer">
-          <input type="checkbox" id="mitem-nf" style="accent-color:var(--green);width:16px;height:16px"/>
-          <span style="font-size:12px" id="mitem-nf-label">Pendente</span>
-        </label>
-      </div>
-      <div class="fg">
-        <label>Contrato</label>
-        <label style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border2);border-radius:8px;cursor:pointer">
-          <input type="checkbox" id="mitem-contrato" style="accent-color:var(--green);width:16px;height:16px"/>
-          <span style="font-size:12px" id="mitem-contrato-label">Pendente</span>
-        </label>
-      </div>
-    </div>
     <div class="fg form-row"><label>Observações</label><textarea id="mitem-obs" placeholder="Alguma observação sobre este item..." style="min-height:48px"></textarea></div>
     <div class="calc-box" id="item-calc">Total: <strong>R$ 0,00</strong></div>
     <input type="hidden" id="mitem-id"/>
@@ -2606,8 +2590,8 @@ function renderOrcamento(){
     <td style="font-size:10px;color:var(--text2);white-space:normal">${renderRateioCell(it)}</td>
     <td style="font-size:11px;text-align:center">${renderPctCell(it)}</td>
     <td style="text-align:center">${execCell}</td>
-    <td style="text-align:center">${canEdit?`<button class="status-pill ${it.nota_fiscal?'ok':'pend'}" onclick="toggleItemField('${it.id}','nota_fiscal',${!it.nota_fiscal})" title="${it.nota_fiscal?'NF recebida':'NF pendente'}">${it.nota_fiscal?'✓':'⏳'}</button>`:(it.nota_fiscal?'<span style="color:var(--green)">✓</span>':'—')}</td>
-    <td style="text-align:center">${canEdit?`<button class="status-pill ${it.contrato?'ok':'pend'}" onclick="toggleItemField('${it.id}','contrato',${!it.contrato})" title="${it.contrato?'Contrato assinado':'Contrato pendente'}">${it.contrato?'✓':'⏳'}</button>`:(it.contrato?'<span style="color:var(--green)">✓</span>':'—')}</td>
+    <td style="text-align:center">${canEdit?`<label class="exec-check ${it.nota_fiscal?'done':'pending'}" style="justify-content:center" title="${it.nota_fiscal?'NF recebida':'NF pendente — clique para marcar'}"><input type="checkbox" ${it.nota_fiscal?'checked':''} onchange="toggleItemField('${it.id}','nota_fiscal',this.checked)"/>${it.nota_fiscal?'✓':'⏳'}</label>`:(it.nota_fiscal?'<span style="color:var(--green)">✓</span>':'—')}</td>
+    <td style="text-align:center">${canEdit?`<label class="exec-check ${it.contrato?'done':'pending'}" style="justify-content:center" title="${it.contrato?'Contrato assinado':'Contrato pendente — clique para marcar'}"><input type="checkbox" ${it.contrato?'checked':''} onchange="toggleItemField('${it.id}','contrato',this.checked)"/>${it.contrato?'✓':'⏳'}</label>`:(it.contrato?'<span style="color:var(--green)">✓</span>':'—')}</td>
     <td style="font-size:11px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100px" title="${it.fornecedor||''}">${it.fornecedor||'—'}</td>
     <td style="font-size:11px;color:var(--text2);white-space:normal">${it.obs||''}</td>
     <td style="font-size:11px;color:var(--text2)">${it.user_nome||'—'}</td>
