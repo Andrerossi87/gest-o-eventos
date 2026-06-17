@@ -395,6 +395,22 @@ tr.item-pendente:hover td{background:#fff5dc;}
               </div>
             </div>
           </div>
+          <div class="ctrl-filter-wrap" id="graf-cc-filter-wrap">
+            <button class="ctrl-filter-btn" id="graf-cc-filter-btn" onclick="toggleGrafCCFilter()" style="min-width:160px">
+              <span id="graf-cc-filter-label">Centro de custo</span>
+              <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </button>
+            <div class="ctrl-filter-dropdown" id="graf-cc-filter-dropdown">
+              <div class="ctrl-filter-search">
+                <input type="text" id="graf-cc-filter-search" placeholder="Buscar centro de custo..." oninput="filtrarGrafCCSearch(this.value)"/>
+              </div>
+              <div class="ctrl-filter-list" id="graf-cc-filter-list"></div>
+              <div class="ctrl-filter-actions">
+                <button class="ctrl-filter-clear" onclick="limparGrafCCFiltro()">Limpar</button>
+                <button class="btn btn-primary btn-sm" onclick="aplicarGrafCCFiltro()">OK</button>
+              </div>
+            </div>
+          </div>
 
         </div>
       </div>
@@ -559,7 +575,7 @@ tr.item-pendente:hover td{background:#fff5dc;}
               <th style="width:18%">Item</th><th style="width:7%">Qtd</th><th style="width:6%">Diárias</th>
               <th style="width:10%">Valor médio</th><th style="width:9%">Total</th>
               <th style="width:13%">Centro de custo</th><th style="width:5%">%</th>
-              <th style="width:5%">Exec.</th><th style="width:5%">NF</th><th style="width:5%">Cont.</th><th style="width:6%" title="Fornecedor / Observação">+</th><th style="width:7%">Por</th><th style="width:7%"></th>
+              <th style="width:5%">Entregue</th><th style="width:5%">NF</th><th style="width:5%">Cont.</th><th style="width:6%" title="Fornecedor / Observação">+</th><th style="width:7%">Por</th><th style="width:7%"></th>
             </tr></thead>
             <tbody id="tb-itens"></tbody>
           </table>
@@ -1063,9 +1079,24 @@ function getCCList(){
   return [...ccs].sort();
 }
 
+// CCs apenas dos eventos que se encaixam no modo atual dos Gráficos
+function getCCListGraf(){
+  const evIds=new Set(
+    GASTOS.filter(g=>grafModo==='receita'?(g.receita&&g.receita>0):(!g.receita||g.receita===0))
+          .map(g=>g.evento_id)
+  );
+  const ccs=new Set();
+  ITENS.forEach(i=>{
+    if(!evIds.has(i.evento_id)) return;
+    if(i.centro_custo) ccs.add(i.centro_custo);
+    if(i.rateio){try{JSON.parse(i.rateio).forEach(r=>r.cc&&ccs.add(r.cc));}catch(e){}}
+  });
+  return [...ccs].sort();
+}
+
 function buildCCFilterList(listId, filtroSet, search=''){
   const list=document.getElementById(listId); if(!list) return;
-  const todos=getCCList();
+  const todos=listId.includes('graf')?getCCListGraf():getCCList();
   const filtrados=search?todos.filter(cc=>cc.toLowerCase().includes(search.toLowerCase())):todos;
   if(!filtrados.length){list.innerHTML='<div style="padding:10px 12px;font-size:12px;color:var(--text3)">Nenhum encontrado</div>';return;}
   list.innerHTML=filtrados.map(cc=>`
@@ -1145,9 +1176,15 @@ document.addEventListener('click',e=>{
 });
 function buildGrafEvList(search){
   const list=document.getElementById('graf-ev-filter-list'); if(!list) return;
+  // Filtra eventos válidos para o modo atual (receita ou orçamento)
+  const evIdsValidos=new Set(
+    GASTOS.filter(g=>grafModo==='receita'?(g.receita&&g.receita>0):(!g.receita||g.receita===0))
+          .map(g=>g.evento_id)
+  );
+  const evsModo=EVENTOS.filter(e=>evIdsValidos.has(e.id));
   const evs=search
-    ? EVENTOS.filter(e=>e.nome.toLowerCase().includes(search.toLowerCase()))
-    : [...EVENTOS].sort((a,b)=>new Date(b.data_ini+'T00:00:00')-new Date(a.data_ini+'T00:00:00'));
+    ? evsModo.filter(e=>e.nome.toLowerCase().includes(search.toLowerCase()))
+    : [...evsModo].sort((a,b)=>new Date(b.data_ini+'T00:00:00')-new Date(a.data_ini+'T00:00:00'));
   if(!evs.length){list.innerHTML='<div style="padding:10px 12px;font-size:12px;color:var(--text3)">Nenhum encontrado</div>';return;}
   list.innerHTML=evs.map(ev=>`
     <label class="ctrl-filter-item">
@@ -1182,6 +1219,23 @@ let grafModo = 'receita'; // 'receita' ou 'orc'
 
 function setGrafModo(modo){
   grafModo = modo;
+  // Filtro de evento sensível ao modo: remove eventos inválidos no novo modo
+  const evIdsValidosModo=new Set(
+    GASTOS.filter(g=>modo==='receita'?(g.receita&&g.receita>0):(!g.receita||g.receita===0))
+          .map(g=>g.evento_id)
+  );
+  [...grafEvFiltro].forEach(id=>{ if(!evIdsValidosModo.has(id)) grafEvFiltro.delete(id); });
+  const labelEv=document.getElementById('graf-ev-filter-label');
+  const btnEv=document.getElementById('graf-ev-filter-btn');
+  if(labelEv&&btnEv){
+    if(grafEvFiltro.size===0){labelEv.textContent='Todos os eventos';btnEv.classList.remove('active');}
+    else{labelEv.textContent=`${grafEvFiltro.size} evento${grafEvFiltro.size>1?'s':''} selecionado${grafEvFiltro.size>1?'s':''}`;btnEv.classList.add('active');}
+  }
+  // Filtro de CC sensível ao modo: remove da seleção os CCs que não existem no novo modo
+  const ccValidos=new Set(getCCListGraf());
+  [...grafCCFiltro].forEach(cc=>{ if(!ccValidos.has(cc)) grafCCFiltro.delete(cc); });
+  if(typeof grafCCOpen!=='undefined' && grafCCOpen) buildCCFilterList('graf-cc-filter-list',grafCCFiltro,'');
+  updateCCBtn('graf',grafCCFiltro);
   const btnRec = document.getElementById('graf-modo-receita');
   const btnOrc = document.getElementById('graf-modo-orc');
   if(btnRec && btnOrc){
@@ -1323,14 +1377,17 @@ function renderDashboard(){
   const totGasto=itens.reduce((s,i)=>s+(i.valor_total||0),0);
   const totOrc=gastos.reduce((s,g)=>s+(g.orcamento||0),0);
   const totRec=gastos.reduce((s,g)=>s+(g.receita||0),0);
-  const totRes=totOrc+totRec-totGasto;
+  const liqRec=totRec-totGasto;
+  const liqOrc=totOrc-totGasto;
   const urgentes=evs.filter(e=>{const d=diasAte(e.data_ini);const df=diasAte(e.data_fim);return d!==null&&d>=0&&d<=7&&df>=0;}).length;
   document.getElementById('dash-kpis').innerHTML=[
     {l:'Total eventos',v:evs.length,s:'cadastrados',c:''},
     {l:'Próximos 7 dias',v:urgentes,s:'urgentes',c:urgentes>0?'red':'green'},
+    {l:'Receita',v:fmtBR(totRec),s:'obtida',c:''},
     {l:'Orçamento',v:fmtBR(totOrc),s:'previsto',c:'amber'},
-    {l:'Despesas',v:fmtBR(totGasto),s:'realizado',c:''},
-    {l:'Líquido (Orc+Rec-Desp)',v:(totRes>=0?'+':'')+fmtBR(totRes),s:totRes>=0?'superávit':'déficit',c:totRes>=0?'green':'red'},
+    {l:'Realizado',v:fmtBR(totGasto),s:'despesas',c:''},
+    {l:'Líquido (Receita − Realizado)',v:(liqRec>=0?'+':'')+fmtBR(liqRec),s:liqRec>=0?'superávit':'déficit',c:liqRec>=0?'green':'red'},
+    {l:'Líquido (Orçamento − Realizado)',v:(liqOrc>=0?'+':'')+fmtBR(liqOrc),s:liqOrc>=0?'superávit':'déficit',c:liqOrc>=0?'green':'red'},
   ].map(m=>`<div class="metric"><div class="metric-label">${m.l}</div><div class="metric-value ${m.c}">${m.v}</div><div class="metric-sub">${m.s}</div></div>`).join('');
 
   // Alertas
@@ -2339,7 +2396,7 @@ function verificarPendencias(){
   const evsSel=EVENTOS.filter(e=>orcFiltroSelecionados.has(e.id));
   if(!evsSel.length) return;
   const itensSel=ITENS.filter(i=>orcFiltroSelecionados.has(i.evento_id));
-  const pendentes=itensSel.filter(i=>!i.executado||!i.nota_fiscal||!i.contrato||!i.fornecedor);
+  const pendentes=itensSel.filter(i=>!i.executado||!i.nota_fiscal||!i.contrato);
   if(!pendentes.length){
     // Remove pendencia alert if exists
     const existing=document.getElementById('pend-alert');
@@ -2348,11 +2405,10 @@ function verificarPendencias(){
   }
   const msgs=pendentes.map(i=>{
     const falta=[];
-    if(!i.executado) falta.push('execução');
+    if(!i.executado) falta.push('entrega');
     if(!i.nota_fiscal) falta.push('NF');
     if(!i.contrato) falta.push('contrato');
-    if(!i.fornecedor) falta.push('fornecedor');
-    return `<div class="pend-alert-item">⚠️ <strong>${i.nome}</strong> — pendente: ${falta.map(f=>`<strong>${f}</strong>`).join(', ')}</div>`;
+    return `<div class="pend-alert-item">⚠️ <strong>${i.nome}</strong> — Pendente: ${falta.map(f=>`<strong>${f}</strong>`).join(', ')}</div>`;
   }).join('');
   let existing=document.getElementById('pend-alert');
   if(!existing){
