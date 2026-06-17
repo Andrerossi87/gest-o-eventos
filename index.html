@@ -559,7 +559,7 @@ tr.item-pendente:hover td{background:#fff5dc;}
               <th style="width:18%">Item</th><th style="width:7%">Qtd</th><th style="width:6%">Diárias</th>
               <th style="width:10%">Valor médio</th><th style="width:9%">Total</th>
               <th style="width:13%">Centro de custo</th><th style="width:5%">%</th>
-              <th style="width:5%">Exec.</th><th style="width:5%">NF</th><th style="width:5%">Cont.</th><th style="width:8%">Forn.</th><th style="width:10%">Observação</th><th style="width:7%">Por</th><th style="width:7%"></th>
+              <th style="width:5%">Exec.</th><th style="width:5%">NF</th><th style="width:5%">Cont.</th><th style="width:6%" title="Fornecedor / Observação">+</th><th style="width:7%">Por</th><th style="width:7%"></th>
             </tr></thead>
             <tbody id="tb-itens"></tbody>
           </table>
@@ -2323,6 +2323,14 @@ async function toggleItemField(id, field, value){
   verificarPendencias();
 }
 
+function toggleDetalhe(id, btn){
+  const row=document.getElementById('det-'+id);
+  if(!row) return;
+  const aberto=row.style.display!=='none';
+  row.style.display=aberto?'none':'table-row';
+  if(btn) btn.textContent=aberto?'+':'−';
+}
+
 function verificarPendencias(){
   const alertDiv=document.getElementById('orc-alerta');
   if(!alertDiv) return;
@@ -2582,6 +2590,11 @@ function renderOrcamento(){
         </label>`
       :`<span class="${executado?'':'exec-badge-pending'}">${executado?'<span style=\'color:var(--green)\'>✓</span>':'⏳ Pendente'}</span>`;
     const trClass=!executado?'item-pendente':'';
+    const _forn=(it.fornecedor||'').trim();
+    const _obs=(it.obs||'').trim();
+    const temDet=_forn||_obs;
+    const detBtn=temDet?`<button class="btn btn-ghost btn-sm" onclick="toggleDetalhe('${it.id}',this)" title="Ver fornecedor e observação" style="font-weight:700;font-size:14px;line-height:1">+</button>`:'<span style="color:var(--text3)">—</span>';
+    const detRow=temDet?`<tr id="det-${it.id}" style="display:none"><td colspan="13" style="padding:8px 14px;font-size:12px;color:var(--text2);background:rgba(0,0,0,.03)">${_forn?`🏢 <strong>Fornecedor:</strong> ${_forn}`:''}${_forn&&_obs?' &nbsp;•&nbsp; ':''}${_obs?`📝 <strong>Observação:</strong> ${_obs}`:''}</td></tr>`:'';
     return `<tr class="${trClass}">
     <td title="${it.nome}">${it.nome}</td>
     <td>${it.qtd??'—'}</td><td>${it.diarias??'—'}</td>
@@ -2592,11 +2605,11 @@ function renderOrcamento(){
     <td style="text-align:center">${execCell}</td>
     <td style="text-align:center">${canEdit?`<label class="exec-check ${it.nota_fiscal?'done':'pending'}" style="justify-content:center" title="${it.nota_fiscal?'NF recebida':'NF pendente — clique para marcar'}"><input type="checkbox" ${it.nota_fiscal?'checked':''} onchange="toggleItemField('${it.id}','nota_fiscal',this.checked)"/>${it.nota_fiscal?'✓':'⏳'}</label>`:(it.nota_fiscal?'<span style="color:var(--green)">✓</span>':'—')}</td>
     <td style="text-align:center">${canEdit?`<label class="exec-check ${it.contrato?'done':'pending'}" style="justify-content:center" title="${it.contrato?'Contrato assinado':'Contrato pendente — clique para marcar'}"><input type="checkbox" ${it.contrato?'checked':''} onchange="toggleItemField('${it.id}','contrato',this.checked)"/>${it.contrato?'✓':'⏳'}</label>`:(it.contrato?'<span style="color:var(--green)">✓</span>':'—')}</td>
-    <td style="font-size:11px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100px" title="${it.fornecedor||''}">${it.fornecedor||'—'}</td>
-    <td style="font-size:11px;color:var(--text2);white-space:normal">${it.obs||''}</td>
+    <td style="text-align:center">${detBtn}</td>
     <td style="font-size:11px;color:var(--text2)">${it.user_nome||'—'}</td>
     <td style="white-space:nowrap;min-width:80px">${canEdit?`<button class="btn btn-ghost btn-sm" onclick="editarItem('${it.id}')" style="margin-right:4px">✎</button><button class="btn btn-danger btn-sm" onclick="excluirItem('${it.id}')">✕</button>`:'—'}</td>
-  </tr>`;}).join('');
+  </tr>
+  ${detRow}`;}).join('');
 }
 
 // ── CONTROLE GASTOS ──
