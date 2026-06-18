@@ -2942,7 +2942,10 @@ async function salvarGasto(){
     ? sb.from('controle_gastos').update(payload).eq('id',editId)
     : sb.from('controle_gastos').insert(payload)
   );
-  if(resGasto.error){toast('Erro: '+resGasto.error.message,true);return;}
+  if(resGasto.error){
+    if(btnG){btnG.disabled=false;btnG.innerHTML='Salvar';}
+    toast('Erro: '+resGasto.error.message,true);return;
+  }
   if(btnG){btnG.disabled=false;btnG.innerHTML='Salvar';}
   closeModal('modal-gasto'); toast('Lançamento salvo!');
 }
