@@ -618,7 +618,7 @@ tr.item-pendente:hover td{background:#fff5dc;}
             <thead><tr>
               <th style="width:20%">Evento</th><th style="width:7%">Staff</th><th style="width:9%">Inscritos</th>
               <th style="width:9%">Pagantes</th><th style="width:13%">Total evento</th>
-              <th style="width:9%">Orçamento</th><th style="width:9%">Receita</th><th style="width:9%">Resultado</th><th style="width:8%">NPS (%)</th>
+              <th style="width:9%">Orçamento</th><th style="width:9%">Receita</th><th style="width:9%">Aporte</th><th style="width:9%">Resultado</th><th style="width:8%">NPS (%)</th>
               <th style="width:10%">Por</th><th style="width:7%"></th>
             </tr></thead>
             <tbody id="tb-ctrl"></tbody>
@@ -768,7 +768,18 @@ tr.item-pendente:hover td{background:#fff5dc;}
           onfocus="formatCurrencyFocus(this)"/>
       </div>
     </div>
-    <div class="calc-box" id="gasto-calc">Resultado (Receita − Gasto): <strong>—</strong></div>
+    <div class="fg form-row">
+      <label>Aporte <span style="font-size:10px;color:var(--text3);font-weight:400">— aporte/subsídio recebido para o evento</span></label>
+      <div style="position:relative">
+        <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:12px;color:var(--text2);pointer-events:none;font-family:'DM Mono',monospace">R$</span>
+        <input id="mgasto-aporte" type="text" inputmode="decimal" placeholder="0,00"
+          style="padding-left:30px;font-family:'DM Mono',monospace;width:100%;padding-right:10px"
+          oninput="formatCurrencyField(this,'mgasto-aporte')"
+          onblur="formatCurrencyBlur(this)"
+          onfocus="formatCurrencyFocus(this)"/>
+      </div>
+    </div>
+    <div class="calc-box" id="gasto-calc">Resultado (Receita + Aporte − Gasto): <strong>—</strong></div>
     <input type="hidden" id="mgasto-id"/>
     <div class="modal-actions">
       <button class="btn btn-primary" onclick="salvarGasto()">Salvar</button>
@@ -1263,7 +1274,7 @@ function getGastosPorModo(gFilt){
 function getLiquidoPorModo(g){
   const desp = ITENS.filter(i=>i.evento_id===g.evento_id).reduce((s,i)=>s+(i.valor_total||0),0);
   if(grafModo==='receita'){
-    return (g.receita||0) - desp;
+    return (g.receita||0) + (g.aporte||0) - desp;
   } else {
     return (g.orcamento||0) - desp;
   }
@@ -1377,16 +1388,18 @@ function renderDashboard(){
   const totGasto=itens.reduce((s,i)=>s+(i.valor_total||0),0);
   const totOrc=gastos.reduce((s,g)=>s+(g.orcamento||0),0);
   const totRec=gastos.reduce((s,g)=>s+(g.receita||0),0);
-  const liqRec=totRec-totGasto;
+  const totApo=gastos.reduce((s,g)=>s+(g.aporte||0),0);
+  const liqRec=totRec+totApo-totGasto;
   const liqOrc=totOrc-totGasto;
   const urgentes=evs.filter(e=>{const d=diasAte(e.data_ini);const df=diasAte(e.data_fim);return d!==null&&d>=0&&d<=7&&df>=0;}).length;
   document.getElementById('dash-kpis').innerHTML=[
     {l:'Total eventos',v:evs.length,s:'cadastrados',c:''},
     {l:'Próximos 7 dias',v:urgentes,s:'urgentes',c:urgentes>0?'red':'green'},
     {l:'Receita',v:fmtBR(totRec),s:'obtida',c:''},
+    {l:'Aporte',v:fmtBR(totApo),s:'recebido',c:'blue'},
     {l:'Orçamento',v:fmtBR(totOrc),s:'previsto',c:'amber'},
     {l:'Realizado',v:fmtBR(totGasto),s:'despesas',c:''},
-    {l:'Líquido (Receita − Realizado)',v:(liqRec>=0?'+':'')+fmtBR(liqRec),s:liqRec>=0?'superávit':'déficit',c:liqRec>=0?'green':'red'},
+    {l:'Líquido (Receita + Aporte − Realizado)',v:(liqRec>=0?'+':'')+fmtBR(liqRec),s:liqRec>=0?'superávit':'déficit',c:liqRec>=0?'green':'red'},
     {l:'Líquido (Orçamento − Realizado)',v:(liqOrc>=0?'+':'')+fmtBR(liqOrc),s:liqOrc>=0?'superávit':'déficit',c:liqOrc>=0?'green':'red'},
   ].map(m=>`<div class="metric"><div class="metric-label">${m.l}</div><div class="metric-value ${m.c}">${m.v}</div><div class="metric-sub">${m.s}</div></div>`).join('');
 
@@ -1500,7 +1513,7 @@ function renderGrafResumo(gFilt){
     });
     const ccList=Object.entries(ccBreak).sort((a,b)=>b[1]-a[1]);
 
-    const item={nome,res,total,orc,ccList,receita:g.receita||0};
+    const item={nome,res,total,orc,ccList,receita:g.receita||0,aporte:g.aporte||0};
     if(res>0) lucrativos.push(item);
     else if(res<0) prejuizo.push(item);
     else zerados.push(item);
@@ -1529,9 +1542,10 @@ function renderGrafResumo(gFilt){
           <span style="font-size:13px;font-weight:600;color:var(--red)">${fmtBR(e.res)}</span>
         </div>
         <div style="font-size:11px;color:var(--text2);margin-top:2px">
-          Gasto: ${fmtBR(e.total)} · Orçado: ${fmtBR(e.orc)} · Receita: ${e.receita>0?fmtBR(e.receita):'—'}
+          Gasto: ${fmtBR(e.total)} · Orçado: ${fmtBR(e.orc)} · Receita: ${e.receita>0?fmtBR(e.receita):'—'}${e.aporte>0?` · Aporte: ${fmtBR(e.aporte)}`:''}
         </div>
         ${e.receita>0?`<div style="margin-top:4px;font-size:10px;color:var(--green)">↳ ${fmtBR(e.receita)} referente à receita do evento</div>`:''}
+        ${e.aporte>0?`<div style="margin-top:2px;font-size:10px;color:#1a56a0">↳ ${fmtBR(e.aporte)} referente ao aporte — sem ele o resultado seria ${(e.res-e.aporte)>=0?'+':''}${fmtBR(e.res-e.aporte)}</div>`:''}
         ${ccHtml}
       </div>`;
     });
@@ -1555,9 +1569,10 @@ function renderGrafResumo(gFilt){
           <span style="font-size:13px;font-weight:600;color:var(--green)">+${fmtBR(e.res)}</span>
         </div>
         <div style="font-size:11px;color:var(--text2);margin-top:2px">
-          Gasto: ${fmtBR(e.total)} · Orçado: ${fmtBR(e.orc)} · Receita: ${e.receita>0?fmtBR(e.receita):'—'}
+          Gasto: ${fmtBR(e.total)} · Orçado: ${fmtBR(e.orc)} · Receita: ${e.receita>0?fmtBR(e.receita):'—'}${e.aporte>0?` · Aporte: ${fmtBR(e.aporte)}`:''}
         </div>
-        ${e.receita>0?`<div style="margin-top:4px;font-size:10px;color:var(--green)">↳ R$${fmtBR(e.receita)} referente à receita do evento</div>`:''}
+        ${e.receita>0?`<div style="margin-top:4px;font-size:10px;color:var(--green)">↳ ${fmtBR(e.receita)} referente à receita do evento</div>`:''}
+        ${e.aporte>0?`<div style="margin-top:2px;font-size:10px;color:#1a56a0">↳ ${fmtBR(e.aporte)} referente ao aporte — sem ele o resultado seria ${(e.res-e.aporte)>=0?'+':''}${fmtBR(e.res-e.aporte)}</div>`:''}
         ${ccHtml}
       </div>`;
     });
@@ -1600,32 +1615,35 @@ function renderGrafDRE(gFilt){
     // Use soma real das despesas (itens) em vez de total_evento do banco
     const despReal=ITENS.filter(i=>i.evento_id===evId).reduce((s,i)=>s+(i.valor_total||0),0);
     const desp=despReal||g.total_evento||0;
-    const orc=g.orcamento||0; const rec=g.receita||0;
-    const liq=grafModo==='receita'?rec-desp:orc-desp;
-    return {nome:ev?ev.nome:evId, mes, orc, rec, desp, liq};
+    const orc=g.orcamento||0; const rec=g.receita||0; const apo=g.aporte||0;
+    const liq=grafModo==='receita'?rec+apo-desp:orc-desp;
+    return {nome:ev?ev.nome:evId, mes, orc, rec, apo, desp, liq};
   });
 
   // Totals per month
   const totOrc=Array(12).fill(0);
   const totRec=Array(12).fill(0);
+  const totApo=Array(12).fill(0);
   const totDesp=Array(12).fill(0);
   const totLiq=Array(12).fill(0);
   evRows.forEach(r=>{
     if(r.mes>=0){
       totOrc[r.mes]+=r.orc;
       totRec[r.mes]+=r.rec;
+      totApo[r.mes]+=r.apo;
       totDesp[r.mes]+=r.desp;
     }
   });
-  const totLiqCalc=meses.map((_,i)=>grafModo==='receita'?totRec[i]-totDesp[i]:totOrc[i]-totDesp[i]);
+  const totLiqCalc=meses.map((_,i)=>grafModo==='receita'?totRec[i]+totApo[i]-totDesp[i]:totOrc[i]-totDesp[i]);
 
   const ytdOrc=totOrc.reduce((s,v)=>s+v,0);
   const ytdRec=totRec.reduce((s,v)=>s+v,0);
+  const ytdApo=totApo.reduce((s,v)=>s+v,0);
   const ytdDesp=totDesp.reduce((s,v)=>s+v,0);
-  const ytdLiq=grafModo==='receita'?ytdRec-ytdDesp:ytdOrc-ytdDesp;
+  const ytdLiq=grafModo==='receita'?ytdRec+ytdApo-ytdDesp:ytdOrc-ytdDesp;
 
   // Only show months with data
-  const mesesAtivos=meses.map((m,i)=>({m,i})).filter(({i})=>totOrc[i]||totRec[i]||totDesp[i]);
+  const mesesAtivos=meses.map((m,i)=>({m,i})).filter(({i})=>totOrc[i]||totRec[i]||totApo[i]||totDesp[i]);
 
   const colStyle='padding:6px 10px;text-align:right;font-size:11px;font-family:"DM Mono",monospace;white-space:nowrap;border-bottom:1px solid var(--border)';
   const colStyleSm='padding:4px 10px;text-align:right;font-size:10px;font-family:"DM Mono",monospace;white-space:nowrap;border-bottom:1px solid var(--border);color:var(--text2)';
@@ -1667,6 +1685,22 @@ function renderGrafDRE(gFilt){
     </tr>`;
   });
 
+  // Section: APORTE (somente modo receita)
+  if(grafModo==='receita' && ytdApo){
+    rows+=`<tr style="background:var(--surface2)">
+      <td style="${lblStyle};font-weight:700;color:#1a56a0">APORTE</td>
+      ${mesesAtivos.map(({i})=>`<td style="${colStyle};color:#1a56a0;font-weight:700"><strong>${totApo[i]?fmtBR(totApo[i]):'—'}</strong></td>`).join('')}
+      <td style="${colStyle};color:#1a56a0;font-weight:700"><strong>${fmtBR(ytdApo)}</strong></td>
+    </tr>`;
+    evRows.filter(r=>r.apo).forEach(r=>{
+      rows+=`<tr>
+        <td style="${lblStyleSm}">↳ ${r.nome}</td>
+        ${mesesAtivos.map(({i})=>`<td style="${colStyleSm}">${r.mes===i?fmtBR(r.apo):'—'}</td>`).join('')}
+        <td style="${colStyleSm}">${fmtBR(r.apo)}</td>
+      </tr>`;
+    });
+  }
+
   // Section: DESPESAS
   rows+=`<tr style="background:var(--surface2)">
     <td style="${lblStyle};font-weight:700;color:var(--red)">DESPESAS</td>
@@ -1683,7 +1717,7 @@ function renderGrafDRE(gFilt){
 
   // Section: LÍQUIDO
   rows+=`<tr style="background:var(--surface2);border-top:2px solid var(--border2)">
-    <td style="${lblStyle};font-weight:700;font-size:12px">LÍQUIDO (${grafModo==='receita'?'Receita':'Orçamento'} − Despesas)</td>
+    <td style="${lblStyle};font-weight:700;font-size:12px">LÍQUIDO (${grafModo==='receita'?'Receita + Aporte':'Orçamento'} − Despesas)</td>
     ${mesesAtivos.map(({i})=>`<td style="${colStyle}">${fvBold(totLiqCalc[i])}</td>`).join('')}
     <td style="${colStyle}">${fvBold(ytdLiq)}</td>
   </tr>`;
@@ -1715,8 +1749,9 @@ function renderGrafKPIs(){
   const totO=gf.reduce((s,g)=>s+(g.orcamento||0),0);
   const totT=itensModo.reduce((s,i)=>s+(i.valor_total||0),0);
   const totRec=gf.reduce((s,g)=>s+(g.receita||0),0);
-  const totRes=grafModo==='receita'?totRec-totT:totO-totT;
-  const baseLabel=grafModo==='receita'?'Receita − Despesas':'Orçamento − Despesas';
+  const totApo=gf.reduce((s,g)=>s+(g.aporte||0),0);
+  const totRes=grafModo==='receita'?totRec+totApo-totT:totO-totT;
+  const baseLabel=grafModo==='receita'?'Receita + Aporte − Despesas':'Orçamento − Despesas';
   const npsEvs=gf.filter(g=>g.nps_participantes!=null);
   const npsMedia=npsEvs.length>0?(npsEvs.reduce((s,g)=>s+(g.nps_participantes||0),0)/npsEvs.length).toFixed(1)+'%':'—';
   const el=document.getElementById('graf-kpis');
@@ -1725,7 +1760,8 @@ function renderGrafKPIs(){
     {l:'Orçamento',v:fmtBR(totO),c:'amber',s:'previsto'},
     {l:'Despesas',v:fmtBR(totT),c:'',s:'realizado'},
     {l:'Receita',v:fmtBR(totRec),c:'green',s:'obtida'},
-    {l:'Líquido (Orc+Rec-Desp)',v:(totRes>=0?'+':'')+fmtBR(totRes),c:totRes>=0?'green':'red',s:totRes>=0?'superávit':'déficit'},
+    ...(grafModo==='receita'?[{l:'Aporte',v:fmtBR(totApo),c:'blue',s:'recebido'}]:[]),
+    {l:`Líquido (${baseLabel})`,v:(totRes>=0?'+':'')+fmtBR(totRes),c:totRes>=0?'green':'red',s:totRes>=0?'superávit':'déficit'},
     {l:'NPS Participantes',v:npsMedia,c:'blue',s:'média satisfação'},
   ].map(m=>`<div class="metric"><div class="metric-label">${m.l}</div><div class="metric-value ${m.c}">${m.v}</div><div class="metric-sub">${m.s}</div></div>`).join('');
 }
@@ -1914,7 +1950,7 @@ async function excluirEvento(id){
 // ── FORMATAÇÃO MOEDA ──
 function formatCurrencyField(input, fieldId){
   formatCurrency(input);
-  if(fieldId==='mgasto-orc'||fieldId==='mgasto-receita') calcGasto();
+  if(fieldId==='mgasto-orc'||fieldId==='mgasto-receita'||fieldId==='mgasto-aporte') calcGasto();
 }
 function parseCurrencyVal(val){
   // Remove R$, spaces, dots (thousand sep), replace comma with dot
@@ -2827,6 +2863,7 @@ function abrirModalGasto(id){
   ['mgasto-staff','mgasto-insc','mgasto-pag','mgasto-nps-part'].forEach(x=>document.getElementById(x).value='');
   document.getElementById('mgasto-orc').value='';
   document.getElementById('mgasto-receita').value='';
+  document.getElementById('mgasto-aporte').value='';
   resetGastoEvSearch();
   document.getElementById('mgasto-total').value='';
   document.getElementById('mgasto-total-display').textContent='R$ 0,00';
@@ -2834,7 +2871,7 @@ function abrirModalGasto(id){
   document.getElementById('mgasto-id').value='';
   document.getElementById('mgasto-title').textContent='Lançar orçamento';
   document.getElementById('gasto-calc').className='calc-box';
-  document.getElementById('gasto-calc').innerHTML='Resultado (Receita − Gasto): <strong>—</strong>';
+  document.getElementById('gasto-calc').innerHTML='Resultado (Receita + Aporte − Gasto): <strong>—</strong>';
   if(id){
     const g=GASTOS.find(x=>x.id===id);
     if(g){
@@ -2849,8 +2886,10 @@ function abrirModalGasto(id){
       document.getElementById('mgasto-pag').value=g.pagantes??'';
       const orcVal=g.orcamento??0;
       const recVal=g.receita??0;
+      const apoVal=g.aporte??0;
       document.getElementById('mgasto-orc').value=orcVal>0?parseFloat(orcVal).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'';
       document.getElementById('mgasto-receita').value=recVal>0?parseFloat(recVal).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'';
+      document.getElementById('mgasto-aporte').value=apoVal>0?parseFloat(apoVal).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'';
       document.getElementById('mgasto-nps-part').value=g.nps_participantes??'';
       document.getElementById('mgasto-id').value=id;
       document.getElementById('mgasto-title').textContent='Editar orçamento';
@@ -2867,12 +2906,14 @@ function calcGasto(){
   const tot=parseN(document.getElementById('mgasto-total').value);
   const recEl=document.getElementById('mgasto-receita');
   const rec=recEl?parseCurrencyVal(recEl.value):null;
+  const apoEl=document.getElementById('mgasto-aporte');
+  const apo=apoEl?parseCurrencyVal(apoEl.value):null;
   const box=document.getElementById('gasto-calc');
-  if(rec!==null&&tot!==null){
-    const res=rec-tot;
+  if((rec!==null||apo!==null)&&tot!==null){
+    const res=(rec||0)+(apo||0)-tot;
     box.className='calc-box '+(res>=0?'res-pos':'res-neg');
-    box.innerHTML=`Resultado (Receita − Gasto): <strong>${res>=0?'+':''}${fmtBR(res)}</strong>`;
-  } else {box.className='calc-box';box.innerHTML='Resultado (Receita − Gasto): <strong>—</strong>';}
+    box.innerHTML=`Resultado (Receita + Aporte − Gasto): <strong>${res>=0?'+':''}${fmtBR(res)}</strong>`;
+  } else {box.className='calc-box';box.innerHTML='Resultado (Receita + Aporte − Gasto): <strong>—</strong>';}
 }
 // receita input handled by formatCurrencyField
 async function salvarGasto(){
@@ -2893,10 +2934,12 @@ async function salvarGasto(){
   const orc=orcEl?parseCurrencyVal(orcEl.value):null;
   const recEl2=document.getElementById('mgasto-receita');
   const receita=recEl2?parseCurrencyVal(recEl2.value):null;
-  const res=(receita!==null&&total!==null)?receita-total:null;
+  const apoEl2=document.getElementById('mgasto-aporte');
+  const aporte=apoEl2?parseCurrencyVal(apoEl2.value):null;
+  const res=((receita!==null||aporte!==null)&&total!==null)?(receita||0)+(aporte||0)-total:null;
   const editId=document.getElementById('mgasto-id').value;
   const nps_participantes=parseN(document.getElementById('mgasto-nps-part').value);
-  const payload={evento_id:evId,staff,inscritos,pagantes,total_evento:total,orcamento:orc,receita,resultado:res,nps_participantes,user_id:USER.id,user_nome:PERFIL.nome||USER.email};
+  const payload={evento_id:evId,staff,inscritos,pagantes,total_evento:total,orcamento:orc,receita,aporte,resultado:res,nps_participantes,user_id:USER.id,user_nome:PERFIL.nome||USER.email};
   const resGasto = await sbQuery(()=> editId
     ? sb.from('controle_gastos').update(payload).eq('id',editId)
     : sb.from('controle_gastos').insert(payload)
@@ -2995,7 +3038,8 @@ function renderControleKPIs(){
   const totT=itensFilt.reduce((s,i)=>s+(i.valor_total||0),0);
   const totO=gf.reduce((s,g)=>s+(g.orcamento||0),0);
   const totRec=gf.reduce((s,g)=>s+(g.receita||0),0);
-  const totR=totO+totRec-totT;
+  const totApo=gf.reduce((s,g)=>s+(g.aporte||0),0);
+  const totR=totO+totRec+totApo-totT;
   document.getElementById('ctrl-kpis').innerHTML=[
     {l:'Staff',v:fmtN(totS),c:'blue',s:'acumulado'},
     {l:'NPS Participantes',v:gf.filter(g=>g.nps_participantes!=null).length>0?(gf.reduce((s,g)=>s+(g.nps_participantes||0),0)/gf.filter(g=>g.nps_participantes!=null).length).toFixed(1)+'%':'—',c:'blue',s:'média satisfação'},
@@ -3004,14 +3048,15 @@ function renderControleKPIs(){
     {l:'Gasto total',v:fmtBR(totT),c:'',s:'realizado'},
     {l:'Orçamento',v:fmtBR(totO),c:'amber',s:'previsto'},
     {l:'Receita total',v:fmtBR(totRec),c:'green',s:'obtida'},
-    {l:'Líquido (Orc+Rec-Desp)',v:(totR>=0?'+':'')+fmtBR(totR),c:totR>=0?'green':'red',s:totR>=0?'superávit':'déficit'},
+    {l:'Aporte total',v:fmtBR(totApo),c:'blue',s:'recebido'},
+    {l:'Líquido (Orc+Rec+Aporte-Desp)',v:(totR>=0?'+':'')+fmtBR(totR),c:totR>=0?'green':'red',s:totR>=0?'superávit':'déficit'},
   ].map(m=>`<div class="metric"><div class="metric-label">${m.l}</div><div class="metric-value ${m.c}">${m.v}</div><div class="metric-sub">${m.s}</div></div>`).join('');
 }
 function renderControleTabela(){
   const canEdit=true;
   const tb=document.getElementById('tb-ctrl');
   const gf=getGastosFiltrados();
-  if(!gf.length){tb.innerHTML=`<tr><td colspan="11" style="text-align:center;padding:30px;color:var(--text3)">${GASTOS.length?'Nenhum evento selecionado no filtro.':'Nenhum lançamento. Clique em "+ Lançar".'}</td></tr>`;return;}
+  if(!gf.length){tb.innerHTML=`<tr><td colspan="12" style="text-align:center;padding:30px;color:var(--text3)">${GASTOS.length?'Nenhum evento selecionado no filtro.':'Nenhum lançamento. Clique em "+ Lançar".'}</td></tr>`;return;}
   tb.innerHTML=gf.map(g=>{
     const ev=EVENTOS.find(e=>e.id===g.evento_id);
     const resCls=g.resultado===null?'':g.resultado>0?'pg':g.resultado<0?'pr':'pgr';
@@ -3023,6 +3068,7 @@ function renderControleTabela(){
       <td style="font-family:'DM Mono',monospace;font-size:11px">${fmtBR(g.total_evento)}</td>
       <td style="font-family:'DM Mono',monospace;font-size:11px">${fmtBR(g.orcamento)}</td>
       <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--green)">${fmtBR(g.receita)}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:11px;color:#1a56a0">${g.aporte?fmtBR(g.aporte):'—'}</td>
       <td><span class="pill ${resCls}" style="font-family:'DM Mono',monospace;font-size:10px">${resTxt}</span></td>
       <td style="font-size:11px;text-align:center">${g.nps_participantes!=null?g.nps_participantes+'%':'—'}</td>
       <td style="font-size:11px;color:var(--text2)">${g.user_nome||'—'}</td>
@@ -3056,13 +3102,13 @@ function exportExcel(){
   ws1['!cols']=[{wch:14},{wch:18},{wch:24},{wch:36},{wch:8},{wch:8},{wch:13},{wch:13}];
   XLSX.utils.book_append_sheet(wb,ws1,'EVENTOS');
   // CONTROLE
-  const ctRows=[['EVENTOS','STAFF','INSCRITOS','PAGANTES','TOTAL EVENTO','ORÇAMENTO','RECEITA','RESULTADO','NPS PARTICIPANTES (%)','LANÇADO POR']];
+  const ctRows=[['EVENTOS','STAFF','INSCRITOS','PAGANTES','TOTAL EVENTO','ORÇAMENTO','RECEITA','APORTE','RESULTADO','NPS PARTICIPANTES (%)','LANÇADO POR']];
   GASTOS.forEach(g=>{
     const ev=EVENTOS.find(e=>e.id===g.evento_id);
-    ctRows.push([ev?ev.nome:g.evento_id,g.staff??'',g.inscritos??'',g.pagantes??'',g.total_evento??'',g.orcamento??'',g.receita??'',g.resultado??'',g.nps_participantes??'',g.user_nome||'']);
+    ctRows.push([ev?ev.nome:g.evento_id,g.staff??'',g.inscritos??'',g.pagantes??'',g.total_evento??'',g.orcamento??'',g.receita??'',g.aporte??'',g.resultado??'',g.nps_participantes??'',g.user_nome||'']);
   });
   const ws2=XLSX.utils.aoa_to_sheet(ctRows);
-  ws2['!cols']=[{wch:24},{wch:8},{wch:10},{wch:10},{wch:14},{wch:13},{wch:14},{wch:18}];
+  ws2['!cols']=[{wch:24},{wch:8},{wch:10},{wch:10},{wch:14},{wch:13},{wch:14},{wch:13},{wch:14},{wch:18}];
   XLSX.utils.book_append_sheet(wb,ws2,'Controle_Gastos');
   // NOMES
   const ws3=XLSX.utils.aoa_to_sheet([['NOMES EVENTOS'],...EVENTOS.map(e=>[e.nome])]);
