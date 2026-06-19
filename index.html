@@ -685,7 +685,7 @@ tr.item-pendente:hover td{background:#fff5dc;}
             <thead><tr>
               <th style="width:20%">Evento</th><th style="width:7%">Staff</th><th style="width:9%">Inscritos</th>
               <th style="width:9%">Pagantes</th><th style="width:13%">Total evento</th>
-              <th style="width:9%">Orçamento</th><th style="width:9%">Receita</th><th style="width:9%">Aporte</th><th style="width:9%">Resultado</th><th style="width:8%">NPS (%)</th>
+              <th style="width:9%">Orçamento</th><th style="width:9%">Receita</th><th style="width:9%">Aporte</th><th style="width:9%">Resultado</th><th style="width:8%">NPS (%)</th><th style="width:10%">Checklist</th>
               <th style="width:10%">Por</th><th style="width:7%"></th>
             </tr></thead>
             <tbody id="tb-ctrl"></tbody>
@@ -2474,6 +2474,7 @@ async function toggleItemField(id, field, value){
   await sbQuery(()=>sb.from('itens_orcamento').update({[field]:value}).eq('id',id));
   renderOrcamento();
   verificarPendencias();
+  if(typeof renderControleTabela==='function' && document.getElementById('tb-ctrl')) renderControleTabela();
 }
 
 function toggleDetalhe(id, btn){
@@ -2525,6 +2526,7 @@ async function toggleExecutado(id, checked){
   // Save to Supabase
   await sbQuery(()=>sb.from('itens_orcamento').update({executado:checked}).eq('id',id));
   renderOrcamento();
+  if(typeof renderControleTabela==='function' && document.getElementById('tb-ctrl')) renderControleTabela();
   if(!checked) toast('⏳ Item marcado como pendente');
   else toast('✓ Item marcado como executado!');
 }
@@ -3119,12 +3121,19 @@ function renderControleTabela(){
   const canEdit=true;
   const tb=document.getElementById('tb-ctrl');
   const gf=getGastosFiltrados();
-  if(!gf.length){tb.innerHTML=`<tr><td colspan="12" style="text-align:center;padding:30px;color:var(--text3)">${GASTOS.length?'Nenhum evento selecionado no filtro.':'Nenhum lançamento. Clique em "+ Lançar".'}</td></tr>`;return;}
+  if(!gf.length){tb.innerHTML=`<tr><td colspan="13" style="text-align:center;padding:30px;color:var(--text3)">${GASTOS.length?'Nenhum evento selecionado no filtro.':'Nenhum lançamento. Clique em "+ Lançar".'}</td></tr>`;return;}
   tb.innerHTML=gf.map(g=>{
     const ev=EVENTOS.find(e=>e.id===g.evento_id);
     const resCls=g.resultado===null?'':g.resultado>0?'pg':g.resultado<0?'pr':'pgr';
     const resTxt=g.resultado===null?'—':(g.resultado>=0?'+':'')+fmtBR(g.resultado);
     const acoes=canEdit?`<button class="btn btn-ghost btn-sm" onclick="abrirModalGasto('${g.id}')">✎</button> <button class="btn btn-danger btn-sm" onclick="excluirGasto('${g.id}')">✕</button>`:'—';
+    const itensEv=ITENS.filter(i=>i.evento_id===g.evento_id);
+    const pend=itensEv.filter(i=>!i.executado||!i.nota_fiscal||!i.contrato).length;
+    const chk=itensEv.length===0
+      ? '<span style="font-size:11px;color:var(--text3)">—</span>'
+      : (pend>0
+        ? `<span style="display:inline-block;font-size:10px;padding:2px 8px;border-radius:20px;background:var(--amber-bg);color:var(--amber);white-space:nowrap" title="${pend} item(ns) com checklist incompleto">⚠ Pendente</span>`
+        : '<span style="font-size:10px;color:var(--text3)">✓ completo</span>');
     return `<tr>
       <td title="${ev?.nome||''}">${ev?ev.nome:g.evento_id}</td>
       <td>${g.staff??'—'}</td><td>${g.inscritos??'—'}</td><td>${g.pagantes??'—'}</td>
@@ -3134,6 +3143,7 @@ function renderControleTabela(){
       <td style="font-family:'DM Mono',monospace;font-size:11px;color:#1a56a0">${g.aporte?fmtBR(g.aporte):'—'}</td>
       <td><span class="pill ${resCls}" style="font-family:'DM Mono',monospace;font-size:10px">${resTxt}</span></td>
       <td style="font-size:11px;text-align:center">${g.nps_participantes!=null?g.nps_participantes+'%':'—'}</td>
+      <td style="text-align:center">${chk}</td>
       <td style="font-size:11px;color:var(--text2)">${g.user_nome||'—'}</td>
       <td style="white-space:nowrap">${acoes}</td>
     </tr>`;
