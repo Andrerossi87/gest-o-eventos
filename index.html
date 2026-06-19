@@ -768,18 +768,7 @@ tr.item-pendente:hover td{background:#fff5dc;}
           onfocus="formatCurrencyFocus(this)"/>
       </div>
     </div>
-    <div class="fg form-row" id="mgasto-aporte-row">
-      <label>Aporte <span id="mgasto-aporte-hint" style="font-size:10px;color:var(--text3);font-weight:400">— preencha a Receita para habilitar</span></label>
-      <div style="position:relative">
-        <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:12px;color:var(--text2);pointer-events:none;font-family:'DM Mono',monospace">R$</span>
-        <input id="mgasto-aporte" type="text" inputmode="decimal" placeholder="0,00" disabled
-          style="padding-left:30px;font-family:'DM Mono',monospace;width:100%;padding-right:10px;opacity:.5;cursor:not-allowed"
-          oninput="formatCurrencyField(this,'mgasto-aporte')"
-          onblur="formatCurrencyBlur(this)"
-          onfocus="formatCurrencyFocus(this)"/>
-      </div>
-    </div>
-    <div class="calc-box" id="gasto-calc">Resultado (Receita + Aporte − Realizado): <strong>—</strong></div>
+    <div class="calc-box" id="gasto-calc">Resultado (Receita − Gasto): <strong>—</strong></div>
     <input type="hidden" id="mgasto-id"/>
     <div class="modal-actions">
       <button class="btn btn-primary" onclick="salvarGasto()">Salvar</button>
@@ -1274,7 +1263,7 @@ function getGastosPorModo(gFilt){
 function getLiquidoPorModo(g){
   const desp = ITENS.filter(i=>i.evento_id===g.evento_id).reduce((s,i)=>s+(i.valor_total||0),0);
   if(grafModo==='receita'){
-    return (g.receita||0) + (g.aporte||0) - desp;
+    return (g.receita||0) - desp;
   } else {
     return (g.orcamento||0) - desp;
   }
@@ -1388,18 +1377,16 @@ function renderDashboard(){
   const totGasto=itens.reduce((s,i)=>s+(i.valor_total||0),0);
   const totOrc=gastos.reduce((s,g)=>s+(g.orcamento||0),0);
   const totRec=gastos.reduce((s,g)=>s+(g.receita||0),0);
-  const totAporte=gastos.reduce((s,g)=>s+(g.aporte||0),0);
-  const liqRec=totRec+totAporte-totGasto;
+  const liqRec=totRec-totGasto;
   const liqOrc=totOrc-totGasto;
   const urgentes=evs.filter(e=>{const d=diasAte(e.data_ini);const df=diasAte(e.data_fim);return d!==null&&d>=0&&d<=7&&df>=0;}).length;
   document.getElementById('dash-kpis').innerHTML=[
     {l:'Total eventos',v:evs.length,s:'cadastrados',c:''},
     {l:'Próximos 7 dias',v:urgentes,s:'urgentes',c:urgentes>0?'red':'green'},
     {l:'Receita',v:fmtBR(totRec),s:'obtida',c:''},
-    {l:'Aporte',v:fmtBR(totAporte),s:'aportado',c:''},
     {l:'Orçamento',v:fmtBR(totOrc),s:'previsto',c:'amber'},
     {l:'Realizado',v:fmtBR(totGasto),s:'despesas',c:''},
-    {l:'Líquido (Receita + Aporte − Realizado)',v:(liqRec>=0?'+':'')+fmtBR(liqRec),s:liqRec>=0?'superávit':'déficit',c:liqRec>=0?'green':'red'},
+    {l:'Líquido (Receita − Realizado)',v:(liqRec>=0?'+':'')+fmtBR(liqRec),s:liqRec>=0?'superávit':'déficit',c:liqRec>=0?'green':'red'},
     {l:'Líquido (Orçamento − Realizado)',v:(liqOrc>=0?'+':'')+fmtBR(liqOrc),s:liqOrc>=0?'superávit':'déficit',c:liqOrc>=0?'green':'red'},
   ].map(m=>`<div class="metric"><div class="metric-label">${m.l}</div><div class="metric-value ${m.c}">${m.v}</div><div class="metric-sub">${m.s}</div></div>`).join('');
 
@@ -1613,7 +1600,7 @@ function renderGrafDRE(gFilt){
     // Use soma real das despesas (itens) em vez de total_evento do banco
     const despReal=ITENS.filter(i=>i.evento_id===evId).reduce((s,i)=>s+(i.valor_total||0),0);
     const desp=despReal||g.total_evento||0;
-    const orc=g.orcamento||0; const rec=(g.receita||0)+(grafModo==='receita'?(g.aporte||0):0);
+    const orc=g.orcamento||0; const rec=g.receita||0;
     const liq=grafModo==='receita'?rec-desp:orc-desp;
     return {nome:ev?ev.nome:evId, mes, orc, rec, desp, liq};
   });
@@ -1728,22 +1715,19 @@ function renderGrafKPIs(){
   const totO=gf.reduce((s,g)=>s+(g.orcamento||0),0);
   const totT=itensModo.reduce((s,i)=>s+(i.valor_total||0),0);
   const totRec=gf.reduce((s,g)=>s+(g.receita||0),0);
-  const totAporte=gf.reduce((s,g)=>s+(g.aporte||0),0);
-  const totRes=grafModo==='receita'?totRec+totAporte-totT:totO-totT;
-  const baseLabel=grafModo==='receita'?'Receita + Aporte − Despesas':'Orçamento − Despesas';
+  const totRes=grafModo==='receita'?totRec-totT:totO-totT;
+  const baseLabel=grafModo==='receita'?'Receita − Despesas':'Orçamento − Despesas';
   const npsEvs=gf.filter(g=>g.nps_participantes!=null);
   const npsMedia=npsEvs.length>0?(npsEvs.reduce((s,g)=>s+(g.nps_participantes||0),0)/npsEvs.length).toFixed(1)+'%':'—';
   const el=document.getElementById('graf-kpis');
   if(!el) return;
-  const kpis=[
+  el.innerHTML=[
     {l:'Orçamento',v:fmtBR(totO),c:'amber',s:'previsto'},
     {l:'Despesas',v:fmtBR(totT),c:'',s:'realizado'},
     {l:'Receita',v:fmtBR(totRec),c:'green',s:'obtida'},
-  ];
-  if(grafModo==='receita') kpis.push({l:'Aporte',v:fmtBR(totAporte),c:'',s:'aportado'});
-  kpis.push({l:grafModo==='receita'?'Líquido (Rec+Aporte−Desp)':'Líquido (Orç−Desp)',v:(totRes>=0?'+':'')+fmtBR(totRes),c:totRes>=0?'green':'red',s:totRes>=0?'superávit':'déficit'});
-  kpis.push({l:'NPS Participantes',v:npsMedia,c:'blue',s:'média satisfação'});
-  el.innerHTML=kpis.map(m=>`<div class="metric"><div class="metric-label">${m.l}</div><div class="metric-value ${m.c}">${m.v}</div><div class="metric-sub">${m.s}</div></div>`).join('');
+    {l:'Líquido (Orc+Rec-Desp)',v:(totRes>=0?'+':'')+fmtBR(totRes),c:totRes>=0?'green':'red',s:totRes>=0?'superávit':'déficit'},
+    {l:'NPS Participantes',v:npsMedia,c:'blue',s:'média satisfação'},
+  ].map(m=>`<div class="metric"><div class="metric-label">${m.l}</div><div class="metric-value ${m.c}">${m.v}</div><div class="metric-sub">${m.s}</div></div>`).join('');
 }
 
 function renderGraficos(){
@@ -1800,7 +1784,7 @@ function renderGraficos(){
   const itensPizza=ITENS.filter(i=>evIdsPizza.has(i.evento_id));
   const totOrcP=gFilt.reduce((s,g)=>s+(g.orcamento||0),0);
   const totRealP=itensPizza.reduce((s,i)=>s+(i.valor_total||0),0);
-  const totRecP=gFilt.reduce((s,g)=>s+(g.receita||0)+(g.aporte||0),0);
+  const totRecP=gFilt.reduce((s,g)=>s+(g.receita||0),0);
   const baseP=grafModo==='receita'?totRecP:totOrcP;
   const totSomP=baseP+totRealP;
   const legPizza=document.getElementById('leg-pizza-orc');
@@ -1930,8 +1914,7 @@ async function excluirEvento(id){
 // ── FORMATAÇÃO MOEDA ──
 function formatCurrencyField(input, fieldId){
   formatCurrency(input);
-  if(fieldId==='mgasto-receita'){toggleAporteEnabled();calcGasto();}
-  else if(fieldId==='mgasto-orc'||fieldId==='mgasto-aporte') calcGasto();
+  if(fieldId==='mgasto-orc'||fieldId==='mgasto-receita') calcGasto();
 }
 function parseCurrencyVal(val){
   // Remove R$, spaces, dots (thousand sep), replace comma with dot
@@ -2844,7 +2827,6 @@ function abrirModalGasto(id){
   ['mgasto-staff','mgasto-insc','mgasto-pag','mgasto-nps-part'].forEach(x=>document.getElementById(x).value='');
   document.getElementById('mgasto-orc').value='';
   document.getElementById('mgasto-receita').value='';
-  document.getElementById('mgasto-aporte').value='';
   resetGastoEvSearch();
   document.getElementById('mgasto-total').value='';
   document.getElementById('mgasto-total-display').textContent='R$ 0,00';
@@ -2852,7 +2834,7 @@ function abrirModalGasto(id){
   document.getElementById('mgasto-id').value='';
   document.getElementById('mgasto-title').textContent='Lançar orçamento';
   document.getElementById('gasto-calc').className='calc-box';
-  document.getElementById('gasto-calc').innerHTML='Resultado (Receita + Aporte − Realizado): <strong>—</strong>';
+  document.getElementById('gasto-calc').innerHTML='Resultado (Receita − Gasto): <strong>—</strong>';
   if(id){
     const g=GASTOS.find(x=>x.id===id);
     if(g){
@@ -2869,8 +2851,6 @@ function abrirModalGasto(id){
       const recVal=g.receita??0;
       document.getElementById('mgasto-orc').value=orcVal>0?parseFloat(orcVal).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'';
       document.getElementById('mgasto-receita').value=recVal>0?parseFloat(recVal).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'';
-      const apVal=g.aporte??0;
-      document.getElementById('mgasto-aporte').value=apVal>0?parseFloat(apVal).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'';
       document.getElementById('mgasto-nps-part').value=g.nps_participantes??'';
       document.getElementById('mgasto-id').value=id;
       document.getElementById('mgasto-title').textContent='Editar orçamento';
@@ -2881,36 +2861,18 @@ function abrirModalGasto(id){
     const evId=document.getElementById('mgasto-ev').value;
     if(evId) atualizarTotalGasto(evId);
   }
-  toggleAporteEnabled();
-  calcGasto();
   document.getElementById('modal-gasto').classList.add('open');
 }
 function calcGasto(){
   const tot=parseN(document.getElementById('mgasto-total').value);
   const recEl=document.getElementById('mgasto-receita');
   const rec=recEl?parseCurrencyVal(recEl.value):null;
-  const apEl=document.getElementById('mgasto-aporte');
-  const ap=apEl?parseCurrencyVal(apEl.value):null;
   const box=document.getElementById('gasto-calc');
   if(rec!==null&&tot!==null){
-    const res=rec+(ap||0)-tot;
+    const res=rec-tot;
     box.className='calc-box '+(res>=0?'res-pos':'res-neg');
-    box.innerHTML=`Resultado (Receita + Aporte − Realizado): <strong>${res>=0?'+':''}${fmtBR(res)}</strong>`;
-  } else {box.className='calc-box';box.innerHTML='Resultado (Receita + Aporte − Realizado): <strong>—</strong>';}
-}
-// Habilita o campo Aporte só depois que a Receita for preenchida (> 0)
-function toggleAporteEnabled(){
-  const recEl=document.getElementById('mgasto-receita');
-  const apEl=document.getElementById('mgasto-aporte');
-  const hint=document.getElementById('mgasto-aporte-hint');
-  if(!recEl||!apEl) return;
-  const rec=parseCurrencyVal(recEl.value);
-  const habilita=rec!==null&&rec>0;
-  apEl.disabled=!habilita;
-  apEl.style.opacity=habilita?'1':'.5';
-  apEl.style.cursor=habilita?'text':'not-allowed';
-  if(hint) hint.textContent=habilita?'— valor de aporte (opcional)':'— preencha a Receita para habilitar';
-  if(!habilita) apEl.value='';
+    box.innerHTML=`Resultado (Receita − Gasto): <strong>${res>=0?'+':''}${fmtBR(res)}</strong>`;
+  } else {box.className='calc-box';box.innerHTML='Resultado (Receita − Gasto): <strong>—</strong>';}
 }
 // receita input handled by formatCurrencyField
 async function salvarGasto(){
@@ -2931,21 +2893,15 @@ async function salvarGasto(){
   const orc=orcEl?parseCurrencyVal(orcEl.value):null;
   const recEl2=document.getElementById('mgasto-receita');
   const receita=recEl2?parseCurrencyVal(recEl2.value):null;
-  const apEl2=document.getElementById('mgasto-aporte');
-  // Aporte só vale quando há receita preenchida
-  const aporte=(receita!==null&&receita>0&&apEl2)?(parseCurrencyVal(apEl2.value)||0):0;
-  const res=(receita!==null&&total!==null)?receita+aporte-total:null;
+  const res=(receita!==null&&total!==null)?receita-total:null;
   const editId=document.getElementById('mgasto-id').value;
   const nps_participantes=parseN(document.getElementById('mgasto-nps-part').value);
-  const payload={evento_id:evId,staff,inscritos,pagantes,total_evento:total,orcamento:orc,receita,aporte,resultado:res,nps_participantes,user_id:USER.id,user_nome:PERFIL.nome||USER.email};
+  const payload={evento_id:evId,staff,inscritos,pagantes,total_evento:total,orcamento:orc,receita,resultado:res,nps_participantes,user_id:USER.id,user_nome:PERFIL.nome||USER.email};
   const resGasto = await sbQuery(()=> editId
     ? sb.from('controle_gastos').update(payload).eq('id',editId)
     : sb.from('controle_gastos').insert(payload)
   );
-  if(resGasto.error){
-    if(btnG){btnG.disabled=false;btnG.innerHTML='Salvar';}
-    toast('Erro: '+resGasto.error.message,true);return;
-  }
+  if(resGasto.error){toast('Erro: '+resGasto.error.message,true);return;}
   if(btnG){btnG.disabled=false;btnG.innerHTML='Salvar';}
   closeModal('modal-gasto'); toast('Lançamento salvo!');
 }
