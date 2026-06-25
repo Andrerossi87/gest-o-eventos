@@ -1347,6 +1347,19 @@ function getLiquidoPorModo(g){
   }
 }
 
+// Resultado por evento (regra de negócio):
+//  • com receita ou aporte  → Receita + Aporte − Despesas  (resultado financeiro)
+//  • sem receita (0 ou vazio) → Orçamento − Despesas        (saldo do orçamento)
+//  • nada lançado            → null ("—")
+function resultadoEvento(g){
+  const desp = ITENS.filter(i=>i.evento_id===g.evento_id).reduce((s,i)=>s+(i.valor_total||0),0);
+  const rec=g.receita, apo=g.aporte, orc=g.orcamento;
+  const temRecApo=(rec!=null&&rec>0)||(apo!=null&&apo>0);
+  if(temRecApo) return (rec||0)+(apo||0)-desp;
+  if((orc!=null&&orc>0)||desp>0) return (orc||0)-desp;
+  return null;
+}
+
 // ── FILTRO EVENTO DASHBOARD ──
 
 function toggleDashEvFilter(){
@@ -1568,7 +1581,7 @@ function renderComparativoAnual(){
   const resTotal=anos.map(a=>{
     const evsAno=evs.filter(e=>getAnoEv(e)===a);
     const idsAno=new Set(evsAno.map(e=>e.id));
-    return gastosFilt.filter(g=>idsAno.has(g.evento_id)).reduce((s,g)=>s+(g.resultado||0),0);
+    return gastosFilt.filter(g=>idsAno.has(g.evento_id)).reduce((s,g)=>s+(resultadoEvento(g)||0),0);
   });
 
   document.getElementById('leg-comp').innerHTML=[
@@ -2973,11 +2986,19 @@ function calcGasto(){
   const rec=recEl?parseCurrencyVal(recEl.value):null;
   const apoEl=document.getElementById('mgasto-aporte');
   const apo=apoEl?parseCurrencyVal(apoEl.value):null;
+  const orcEl=document.getElementById('mgasto-orc');
+  const orc=orcEl?parseCurrencyVal(orcEl.value):null;
   const box=document.getElementById('gasto-calc');
-  if((rec!==null||apo!==null)&&tot!==null){
-    const res=(rec||0)+(apo||0)-tot;
+  const temRecApo=(rec!=null&&rec>0)||(apo!=null&&apo>0);
+  let res=null,label='Receita + Aporte − Gasto';
+  if(temRecApo&&tot!==null){
+    res=(rec||0)+(apo||0)-tot; label='Receita + Aporte − Gasto';
+  } else if(!temRecApo && ((orc!=null&&orc>0)||(tot!=null&&tot>0))){
+    res=(orc||0)-(tot||0); label='Orçamento − Gasto';
+  }
+  if(res!==null){
     box.className='calc-box '+(res>=0?'res-pos':'res-neg');
-    box.innerHTML=`Resultado (Receita + Aporte − Gasto): <strong>${res>=0?'+':''}${fmtBR(res)}</strong>`;
+    box.innerHTML=`Resultado (${label}): <strong>${res>0?'+':''}${fmtBR(res)}</strong>`;
   } else {box.className='calc-box';box.innerHTML='Resultado (Receita + Aporte − Gasto): <strong>—</strong>';}
 }
 // receita input handled by formatCurrencyField
@@ -3001,7 +3022,9 @@ async function salvarGasto(){
   const receita=recEl2?parseCurrencyVal(recEl2.value):null;
   const apoEl2=document.getElementById('mgasto-aporte');
   const aporte=apoEl2?parseCurrencyVal(apoEl2.value):null;
-  const res=((receita!==null||aporte!==null)&&total!==null)?(receita||0)+(aporte||0)-total:null;
+  const temRecApo=(receita!=null&&receita>0)||(aporte!=null&&aporte>0);
+  const res=temRecApo?((receita||0)+(aporte||0)-(total||0))
+            :(((orc!=null&&orc>0)||(total!=null&&total>0))?((orc||0)-(total||0)):null);
   const editId=document.getElementById('mgasto-id').value;
   const nps_participantes=parseN(document.getElementById('mgasto-nps-part').value);
   const payload={evento_id:evId,staff,inscritos,pagantes,total_evento:total,orcamento:orc,receita,aporte,resultado:res,nps_participantes,user_id:USER.id,user_nome:PERFIL.nome||USER.email};
@@ -3104,7 +3127,7 @@ function renderControleKPIs(){
   const totO=gf.reduce((s,g)=>s+(g.orcamento||0),0);
   const totRec=gf.reduce((s,g)=>s+(g.receita||0),0);
   const totApo=gf.reduce((s,g)=>s+(g.aporte||0),0);
-  const totR=totO+totRec+totApo-totT;
+  const totR=gf.reduce((s,g)=>s+(resultadoEvento(g)||0),0);
   document.getElementById('ctrl-kpis').innerHTML=[
     {l:'Staff',v:fmtN(totS),c:'blue',s:'acumulado'},
     {l:'NPS Participantes',v:gf.filter(g=>g.nps_participantes!=null).length>0?(gf.reduce((s,g)=>s+(g.nps_participantes||0),0)/gf.filter(g=>g.nps_participantes!=null).length).toFixed(1)+'%':'—',c:'blue',s:'média satisfação'},
@@ -3114,7 +3137,7 @@ function renderControleKPIs(){
     {l:'Orçamento',v:fmtBR(totO),c:'amber',s:'previsto'},
     {l:'Receita total',v:fmtBR(totRec),c:'green',s:'obtida'},
     {l:'Aporte total',v:fmtBR(totApo),c:'blue',s:'recebido'},
-    {l:'Líquido (Orc+Rec+Aporte-Desp)',v:(totR>=0?'+':'')+fmtBR(totR),c:totR>=0?'green':'red',s:totR>=0?'superávit':'déficit'},
+    {l:'Líquido (soma dos resultados)',v:(totR>=0?'+':'')+fmtBR(totR),c:totR>=0?'green':'red',s:totR>=0?'superávit':'déficit'},
   ].map(m=>`<div class="metric"><div class="metric-label">${m.l}</div><div class="metric-value ${m.c}">${m.v}</div><div class="metric-sub">${m.s}</div></div>`).join('');
 }
 function renderControleTabela(){
@@ -3124,8 +3147,9 @@ function renderControleTabela(){
   if(!gf.length){tb.innerHTML=`<tr><td colspan="13" style="text-align:center;padding:30px;color:var(--text3)">${GASTOS.length?'Nenhum evento selecionado no filtro.':'Nenhum lançamento. Clique em "+ Lançar".'}</td></tr>`;return;}
   tb.innerHTML=gf.map(g=>{
     const ev=EVENTOS.find(e=>e.id===g.evento_id);
-    const resCls=g.resultado===null?'':g.resultado>0?'pg':g.resultado<0?'pr':'pgr';
-    const resTxt=g.resultado===null?'—':(g.resultado>=0?'+':'')+fmtBR(g.resultado);
+    const resVal=resultadoEvento(g);
+    const resCls=resVal===null?'':resVal>0?'pg':resVal<0?'pr':'pgr';
+    const resTxt=resVal===null?'—':resVal===0?fmtBR(0):(resVal>0?'+':'')+fmtBR(resVal);
     const acoes=canEdit?`<button class="btn btn-ghost btn-sm" onclick="abrirModalGasto('${g.id}')">✎</button> <button class="btn btn-danger btn-sm" onclick="excluirGasto('${g.id}')">✕</button>`:'—';
     const itensEv=ITENS.filter(i=>i.evento_id===g.evento_id);
     const pend=itensEv.filter(i=>!i.executado||!i.nota_fiscal||!i.contrato).length;
@@ -3178,7 +3202,7 @@ function exportExcel(){
   const ctRows=[['EVENTOS','STAFF','INSCRITOS','PAGANTES','TOTAL EVENTO','ORÇAMENTO','RECEITA','APORTE','RESULTADO','NPS PARTICIPANTES (%)','LANÇADO POR']];
   GASTOS.forEach(g=>{
     const ev=EVENTOS.find(e=>e.id===g.evento_id);
-    ctRows.push([ev?ev.nome:g.evento_id,g.staff??'',g.inscritos??'',g.pagantes??'',g.total_evento??'',g.orcamento??'',g.receita??'',g.aporte??'',g.resultado??'',g.nps_participantes??'',g.user_nome||'']);
+    ctRows.push([ev?ev.nome:g.evento_id,g.staff??'',g.inscritos??'',g.pagantes??'',g.total_evento??'',g.orcamento??'',g.receita??'',g.aporte??'',(resultadoEvento(g)??''),g.nps_participantes??'',g.user_nome||'']);
   });
   const ws2=XLSX.utils.aoa_to_sheet(ctRows);
   ws2['!cols']=[{wch:24},{wch:8},{wch:10},{wch:10},{wch:14},{wch:13},{wch:14},{wch:13},{wch:14},{wch:18}];
