@@ -1735,6 +1735,7 @@ function renderGrafDRE(gFilt){
   if(!el) return;
   if(!gFilt.length){el.innerHTML='<p style="font-size:12px;color:var(--text3)">Nenhum dado para o período.</p>';return;}
   const meses=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const isRec=grafModo==='receita';
   const evIds=[...new Set(gFilt.map(g=>g.evento_id))];
   const evRows=evIds.map(evId=>{
     const ev=EVENTOS.find(e=>e.id===evId);
@@ -1743,18 +1744,82 @@ function renderGrafDRE(gFilt){
     const despReal=ITENS.filter(i=>i.evento_id===evId).reduce((s,i)=>s+(i.valor_total||0),0);
     const desp=despReal||g.total_evento||0;
     const orc=g.orcamento||0, rec=g.receita||0, apo=g.aporte||0;
-    const liq=grafModo==='receita'?rec+apo-desp:orc+apo-desp;
+    const liq=isRec?rec+apo-desp:orc+apo-desp;
     return {nome:ev?ev.nome:evId, mes, orc, rec, apo, desp, liq};
   });
   const totOrc=Array(12).fill(0),totRec=Array(12).fill(0),totApo=Array(12).fill(0),totDesp=Array(12).fill(0);
   evRows.forEach(r=>{ if(r.mes>=0){ totOrc[r.mes]+=r.orc; totRec[r.mes]+=r.rec; totApo[r.mes]+=r.apo; totDesp[r.mes]+=r.desp; } });
-  const totLiqCalc=meses.map((_,i)=>grafModo==='receita'?totRec[i]+totApo[i]-totDesp[i]:totOrc[i]+totApo[i]-totDesp[i]);
+  const totLiqCalc=meses.map((_,i)=>isRec?totRec[i]+totApo[i]-totDesp[i]:totOrc[i]+totApo[i]-totDesp[i]);
   const ytdOrc=totOrc.reduce((s,v)=>s+v,0), ytdRec=totRec.reduce((s,v)=>s+v,0), ytdApo=totApo.reduce((s,v)=>s+v,0), ytdDesp=totDesp.reduce((s,v)=>s+v,0);
-  const ytdLiq=grafModo==='receita'?ytdRec+ytdApo-ytdDesp:ytdOrc+ytdApo-ytdDesp;
+  const ytdLiq=isRec?ytdRec+ytdApo-ytdDesp:ytdOrc+ytdApo-ytdDesp;
   const mesesAtivos=meses.map((m,i)=>({m,i})).filter(({i})=>totOrc[i]||totRec[i]||totApo[i]||totDesp[i]);
 
-  const liqCell=v=>`<strong style="color:${v<0?'var(--red)':v>0?'var(--green)':'var(--text2)'}">${v>=0?'+':'-'}${fmtBR(Math.abs(v))}</strong>`;
+  // ---- Indicadores e resultados ----
+  const totInsc=gFilt.reduce((s,g)=>s+(g.inscritos||0),0);
+  const totPag=gFilt.reduce((s,g)=>s+(g.pagantes||0),0);
+  const resultOp=ytdRec-ytdDesp;
+  const margem=ytdRec>0?(ytdLiq/ytdRec*100):null;
+  const variacao=ytdOrc-ytdDesp;
+  const variacaoPct=ytdOrc>0?(variacao/ytdOrc*100):null;
+  const consumoPct=ytdOrc>0?(ytdDesp/ytdOrc*100):null;
+  const custoInsc=totInsc>0?ytdDesp/totInsc:null;
+  const ticket=totPag>0?ytdRec/totPag:null;
+  const resInsc=totInsc>0?ytdLiq/totInsc:null;
+  const conv=totInsc>0?(totPag/totInsc*100):null;
 
+  const mono=v=>`<span style="font-family:'DM Mono',monospace">${fmtBR(v)}</span>`;
+  const monoSign=v=>`<span style="font-family:'DM Mono',monospace;font-weight:600;color:${v<0?'var(--red)':v>0?'var(--green)':'var(--text2)'}">${v>=0?'+':'−'}${fmtBR(Math.abs(v))}</span>`;
+  const r2=(l,v,bold,top)=>`<tr${top?` style="border-top:${top}"`:''}><td style="padding:5px 0;${bold?'font-weight:700;color:var(--text)':'color:var(--text2)'}">${l}</td><td style="text-align:right;padding:5px 0;${bold?'font-weight:700':''}">${v}</td></tr>`;
+  const cardStyle='flex:1;min-width:240px;border:1px solid var(--border);border-radius:10px;padding:12px 14px;background:var(--surface)';
+  const titStyle='font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.03em;margin-bottom:6px';
+
+  // ---- Card 1: cascata (acumulado) ----
+  let casc='';
+  if(isRec){
+    casc+=r2('Receita',mono(ytdRec));
+    if(ytdApo) casc+=r2('(+) Aporte',mono(ytdApo));
+    casc+=r2('(−) Despesas',`<span style="font-family:'DM Mono',monospace;color:var(--red)">${fmtBR(ytdDesp)}</span>`);
+    casc+=r2('= Resultado operacional',monoSign(resultOp),false,'1px solid var(--border)');
+    casc+=r2('= Resultado líquido',monoSign(ytdLiq),true,'2px solid var(--border2)');
+    if(margem!=null) casc+=r2('Margem líquida',`<span style="font-weight:600;color:${margem>=0?'var(--green)':'var(--red)'}">${margem.toFixed(1)}%</span>`);
+  } else {
+    casc+=r2('Orçamento',mono(ytdOrc));
+    if(ytdApo) casc+=r2('(+) Aporte',mono(ytdApo));
+    casc+=r2('(−) Despesas',`<span style="font-family:'DM Mono',monospace;color:var(--red)">${fmtBR(ytdDesp)}</span>`);
+    casc+=r2('= Saldo',monoSign(ytdLiq),true,'2px solid var(--border2)');
+    if(consumoPct!=null) casc+=r2('% do orçamento consumido',`<span style="font-weight:600">${consumoPct.toFixed(1)}%</span>`);
+  }
+  const cardCasc=`<div style="${cardStyle}"><div style="${titStyle}">Resultado (acumulado)</div><table style="width:100%;font-size:12px;border-collapse:collapse">${casc}</table></div>`;
+
+  // ---- Card 2: Orçado x Realizado x Variação ----
+  let cardCmp='';
+  if(ytdOrc>0){
+    const economia=variacao>=0;
+    const cor=economia?'var(--green)':'var(--red)';
+    const lbl=economia?'Economia':'Estouro';
+    let t='';
+    t+=r2('Orçado',mono(ytdOrc));
+    t+=r2('Realizado',`<span style="font-family:'DM Mono',monospace;color:var(--red)">${fmtBR(ytdDesp)}</span>`);
+    t+=r2('Variação',`<span style="font-weight:700;color:${cor}">${lbl} ${fmtBR(Math.abs(variacao))}${variacaoPct!=null?` (${Math.abs(variacaoPct).toFixed(1)}%)`:''}</span>`,true,'1px solid var(--border)');
+    cardCmp=`<div style="${cardStyle}"><div style="${titStyle}">Orçado × Realizado</div><table style="width:100%;font-size:12px;border-collapse:collapse">${t}</table></div>`;
+  }
+
+  // ---- Card 3: Indicadores ----
+  const chips=[];
+  if(custoInsc!=null) chips.push(['Custo / inscrito',fmtBR(custoInsc)]);
+  if(ticket!=null) chips.push(['Ticket médio',fmtBR(ticket)]);
+  if(resInsc!=null) chips.push(['Resultado / inscrito',fmtBR(resInsc)]);
+  if(conv!=null) chips.push(['Conversão inscritos→pagantes',conv.toFixed(1)+'%']);
+  let cardInd='';
+  if(chips.length){
+    const items=chips.map(([l,v])=>`<div style="padding:6px 0"><div style="font-size:10px;color:var(--text3)">${l}</div><div style="font-size:14px;font-weight:700;font-family:'DM Mono',monospace;color:var(--text)">${v}</div></div>`).join('');
+    cardInd=`<div style="${cardStyle}"><div style="${titStyle}">Indicadores</div>${items}</div>`;
+  }
+
+  const resumoHtml=`<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:14px">${cardCasc}${cardCmp}${cardInd}</div>`;
+
+  // ---- Matriz mensal (detalhe) ----
+  const liqCell=v=>`<strong style="color:${v<0?'var(--red)':v>0?'var(--green)':'var(--text2)'}">${v>=0?'+':'-'}${fmtBR(Math.abs(v))}</strong>`;
   const secao=(nome,cor,arr,ytd,subKey)=>{
     let r=`<tr class="dre-sec"><td class="dre-firstcol dre-lbl" style="color:${cor};font-weight:700">${nome}</td>`;
     r+=mesesAtivos.map(({i})=>`<td class="dre-num" style="color:${cor};font-weight:700">${arr[i]?fmtBR(arr[i]):'<span style="color:var(--text3);font-weight:400">—</span>'}</td>`).join('');
@@ -1766,24 +1831,34 @@ function renderGrafDRE(gFilt){
     });
     return r;
   };
+  const linhaCalc=(label,sub,arrCalc,ytdVal,subFn,isTot)=>{
+    let r=`<tr class="dre-sec${isTot?' dre-tot':''}"><td class="dre-firstcol dre-lbl" style="font-weight:700">${label}${sub?` <span style="font-weight:400;color:var(--text3);font-size:10px">(${sub})</span>`:''}</td>`;
+    r+=mesesAtivos.map(({i})=>`<td class="dre-num">${liqCell(arrCalc[i])}</td>`).join('');
+    r+=`<td class="dre-num dre-totcol">${liqCell(ytdVal)}</td></tr>`;
+    evRows.filter(x=>x.rec||x.desp||x.apo||x.orc).forEach(x=>{
+      const v=subFn(x);
+      r+=`<tr class="dre-row dre-sub"><td class="dre-firstcol dre-lbl">↳ ${x.nome}</td>`;
+      r+=mesesAtivos.map(({i})=>`<td class="dre-num">${x.mes===i?liqCell(v):'<span style="color:var(--text3)">—</span>'}</td>`).join('');
+      r+=`<td class="dre-num dre-totcol">${liqCell(v)}</td></tr>`;
+    });
+    return r;
+  };
 
   let rows='';
-  rows+=secao('ORÇAMENTO','var(--amber)',totOrc,ytdOrc,'orc');
-  rows+=secao('RECEITA','var(--green)',totRec,ytdRec,'rec');
-  if(ytdApo) rows+=secao('APORTE','var(--blue)',totApo,ytdApo,'apo');
-  rows+=secao('DESPESAS','var(--red)',totDesp,ytdDesp,'desp');
+  if(isRec){
+    rows+=secao('RECEITA','var(--green)',totRec,ytdRec,'rec');
+    if(ytdApo) rows+=secao('APORTE','var(--blue)',totApo,ytdApo,'apo');
+    rows+=secao('DESPESAS','var(--red)',totDesp,ytdDesp,'desp');
+    rows+=linhaCalc('= RESULTADO OPERACIONAL','sem aporte',meses.map((_,i)=>totRec[i]-totDesp[i]),resultOp,x=>x.rec-x.desp,false);
+    rows+=linhaCalc('= RESULTADO LÍQUIDO','Receita + Aporte − Despesas',totLiqCalc,ytdLiq,x=>x.liq,true);
+  } else {
+    rows+=secao('ORÇAMENTO','var(--amber)',totOrc,ytdOrc,'orc');
+    if(ytdApo) rows+=secao('APORTE','var(--blue)',totApo,ytdApo,'apo');
+    rows+=secao('DESPESAS','var(--red)',totDesp,ytdDesp,'desp');
+    rows+=linhaCalc('= SALDO','Orçamento + Aporte − Despesas',totLiqCalc,ytdLiq,x=>x.liq,true);
+  }
 
-  const liqLbl=grafModo==='receita'?'Receita + Aporte − Despesas':'Orçamento + Aporte − Despesas';
-  rows+=`<tr class="dre-sec dre-tot"><td class="dre-firstcol dre-lbl" style="font-weight:700">LÍQUIDO <span style="font-weight:400;color:var(--text3);font-size:10px">(${liqLbl})</span></td>`;
-  rows+=mesesAtivos.map(({i})=>`<td class="dre-num">${liqCell(totLiqCalc[i])}</td>`).join('');
-  rows+=`<td class="dre-num dre-totcol">${liqCell(ytdLiq)}</td></tr>`;
-  evRows.filter(r=>r.rec||r.desp||r.apo||r.orc).forEach(x=>{
-    rows+=`<tr class="dre-row dre-sub"><td class="dre-firstcol dre-lbl">↳ ${x.nome}</td>`;
-    rows+=mesesAtivos.map(({i})=>`<td class="dre-num">${x.mes===i?liqCell(x.liq):'<span style="color:var(--text3)">—</span>'}</td>`).join('');
-    rows+=`<td class="dre-num dre-totcol">${liqCell(x.liq)}</td></tr>`;
-  });
-
-  el.innerHTML=`<div class="dre-wrap"><table class="dre-tbl">
+  const matrizHtml=`<div class="dre-wrap"><table class="dre-tbl">
     <thead><tr>
       <th class="dre-firstcol">YTD — acumulado</th>
       ${mesesAtivos.map(({m})=>`<th>${m}</th>`).join('')}
@@ -1791,6 +1866,8 @@ function renderGrafDRE(gFilt){
     </tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`;
+
+  el.innerHTML=resumoHtml+matrizHtml;
 }
 
 function renderGrafKPIs(){
