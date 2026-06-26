@@ -1026,6 +1026,8 @@ async function carregarDados(){
   document.getElementById('badge-ev').textContent=EVENTOS.length;
 }
 
+async function recarregarTela(){ try{ await carregarDados(); populateCCFilters(); }catch(e){} refreshCurrentPage(); }
+
 function setupRealtime(){
   sb.channel('all-changes')
     .on('postgres_changes',{event:'*',schema:'public',table:'eventos'},async()=>{
@@ -2082,7 +2084,7 @@ async function salvarEvento(){
   );
   if(btnEv){btnEv.disabled=false;btnEv.innerHTML='Salvar evento';}
   if(resEv.error){toast('Erro ao salvar: '+resEv.error.message,true);return;}
-  closeModal('modal-ev'); toast('Evento salvo!');
+  closeModal('modal-ev'); toast('Evento salvo!'); await recarregarTela();
 }
 async function excluirEvento(id){
   if(!confirm('Tem certeza que deseja excluir este evento? Todos os itens e lançamentos vinculados serão removidos. Esta ação não pode ser desfeita.')) return;
@@ -2090,7 +2092,7 @@ async function excluirEvento(id){
   await sbQuery(()=>sb.from('controle_gastos').delete().eq('evento_id',id));
   const resDelEv=await sbQuery(()=>sb.from('eventos').delete().eq('id',id));
   if(resDelEv.error){toast('Erro ao excluir.',true);return;}
-  toast('Evento excluído.');
+  toast('Evento excluído.'); await recarregarTela();
 }
 
 
@@ -2524,7 +2526,7 @@ async function salvarItem(){
   // Sincronizar total no Orçamento
   const evIdSync=document.getElementById('mitem-ev').value;
   await sincronizarTotalOrcamento(evIdSync);
-  closeModal('modal-item'); toast('Item salvo!');
+  closeModal('modal-item'); toast('Item salvo!'); await recarregarTela();
 }
 
 function editarItem(id){
@@ -2624,7 +2626,7 @@ async function toggleExecutado(id, checked){
 async function excluirItem(id){
   if(!confirm('Tem certeza que deseja excluir este item? Esta ação não pode ser desfeita.')) return;
   await sbQuery(()=>sb.from('itens_orcamento').delete().eq('id',id));
-  toast('Item removido.');
+  toast('Item removido.'); await recarregarTela();
 }
 
 
@@ -3111,12 +3113,12 @@ async function salvarGasto(){
   );
   if(resGasto.error){toast('Erro: '+resGasto.error.message,true);return;}
   if(btnG){btnG.disabled=false;btnG.innerHTML='Salvar';}
-  closeModal('modal-gasto'); toast('Lançamento salvo!');
+  closeModal('modal-gasto'); toast('Lançamento salvo!'); await recarregarTela();
 }
 async function excluirGasto(id){
   if(!confirm('Tem certeza que deseja excluir este lançamento? Esta ação não pode ser desfeita.')) return;
   await sbQuery(()=>sb.from('controle_gastos').delete().eq('id',id));
-  toast('Registro removido.');
+  toast('Registro removido.'); await recarregarTela();
 }
 
 // ── FILTRO CONTROLE ──
